@@ -1,0 +1,33 @@
+# El stack del backend todavía no está definido: esto cubre lo habitual y se ajusta cuando se elija.
+
+# Secretos: nunca se commitean (claves, tokens, credenciales de la base de datos)
+.env
+.env.*
+!.env.example
+
+# Dependencias
+node_modules/
+.venv/
+venv/
+__pycache__/
+
+# Compilados y salidas
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Bases de datos locales
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor y sistema
+.vscode/
+.idea/
+.DS_Store
