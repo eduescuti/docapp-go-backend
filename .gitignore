@@ -1,4 +1,4 @@
-# El stack del backend todavía no está definido: esto cubre lo habitual y se ajusta cuando se elija.
+# Backend: Node.js + TypeScript (node:http) + Prisma + SQLite.
 
 # Secretos: nunca se commitean (claves, tokens, credenciales de la base de datos)
 .env
@@ -21,6 +21,10 @@ coverage/
 *.sqlite
 *.sqlite3
 *.db
+*.db-journal
+
+# PDF de resultados cargados por terceros: son datos médicos, nunca van al repo
+uploads/
 
 # Logs
 logs/

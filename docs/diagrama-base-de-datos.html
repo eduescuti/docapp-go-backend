@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Base de datos DocApp Go</title>
+<meta name="description" content="Diagrama entidad–relación de la base de datos de DocApp Go (Sprint 2): 26 tablas, relaciones, restricciones y reglas de negocio.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F4F6FA;
+    --surface: #FFFFFF;
+    --surface-2: #F8FAFC;
+    --ink: #0F172A;
+    --muted: #64748B;
+    --line: #E2E8F0;
+    --line-strong: #CBD5E1;
+    --brand: #0284C7;
+    --brand-soft: #E0F2FE;
+    --brand-ink: #075985;
+    --pk: #B45309;
+    --pk-soft: #FEF3C7;
+    --edge: #94A3B8;
+    --edge-hi: #0284C7;
+    --grid: rgba(15, 23, 42, .055);
+    --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 2px 8px rgba(15, 23, 42, .05);
+    --shadow-pop: 0 18px 40px -12px rgba(15, 23, 42, .35);
+
+    --m-identidad: #2563EB;
+    --m-cobertura: #059669;
+    --m-instituciones: #EA580C;
+    --m-pacientes: #DB2777;
+    --m-profesionales: #0D9488;
+    --m-turnos: #7C3AED;
+    --m-estudios: #B45309;
+    --m-recetas: #4F46E5;
+
+    --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #020617; --surface: #0F172A; --surface-2: #131D33; --ink: #F1F5F9; --muted: #94A3B8;
+      --line: #243149; --line-strong: #34445F; --brand: #38BDF8; --brand-soft: #0C2A3D; --brand-ink: #7DD3FC;
+      --pk: #FBBF24; --pk-soft: #3A2E10; --edge: #56688A; --edge-hi: #38BDF8; --grid: rgba(148, 163, 184, .07);
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 2px 10px rgba(0, 0, 0, .35); --shadow-pop: 0 18px 44px -10px rgba(0, 0, 0, .7);
+      --m-identidad: #60A5FA; --m-cobertura: #34D399; --m-instituciones: #FB923C; --m-pacientes: #F472B6;
+      --m-profesionales: #2DD4BF; --m-turnos: #A78BFA; --m-estudios: #FBBF24; --m-recetas: #818CF8;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #020617; --surface: #0F172A; --surface-2: #131D33; --ink: #F1F5F9; --muted: #94A3B8;
+    --line: #243149; --line-strong: #34445F; --brand: #38BDF8; --brand-soft: #0C2A3D; --brand-ink: #7DD3FC;
+    --pk: #FBBF24; --pk-soft: #3A2E10; --edge: #56688A; --edge-hi: #38BDF8; --grid: rgba(148, 163, 184, .07);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 2px 10px rgba(0, 0, 0, .35); --shadow-pop: 0 18px 44px -10px rgba(0, 0, 0, .7);
+    --m-identidad: #60A5FA; --m-cobertura: #34D399; --m-instituciones: #FB923C; --m-pacientes: #F472B6;
+    --m-profesionales: #2DD4BF; --m-turnos: #A78BFA; --m-estudios: #FBBF24; --m-recetas: #818CF8;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  code, .mono { font-family: var(--font-mono); }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 0 16px; }
+  @media (min-width: 720px) { .wrap { padding: 0 28px; } }
+
+  /* ── Encabezado ── */
+  header.hero { padding: 28px 0 18px; }
+  .hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .eyebrow { font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--brand-ink);
+    background: var(--brand-soft); padding: 6px 10px; border-radius: 999px; display: inline-block; }
+  h1 { font-size: clamp(24px, 3.4vw, 36px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin: 12px 0 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 70ch; margin: 10px 0 0; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; box-shadow: var(--shadow); display: flex; gap: 6px; align-items: baseline; }
+  .stat b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+  .icon-btn:hover { border-color: var(--brand); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ── Pestañas y barra ── */
+  .bar { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--paper) 90%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .bar-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; }
+  .tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .tab { border: 0; background: none; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--muted); cursor: pointer; min-height: 36px; }
+  .tab[aria-selected="true"] { background: var(--brand); color: #fff; }
+  :root[data-theme="dark"] .tab[aria-selected="true"] { color: #020617; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tab[aria-selected="true"] { color: #020617; } }
+  .search { position: relative; flex: 1 1 220px; max-width: 320px; }
+  .search input { width: 100%; font: 500 13px var(--font-ui); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 10px; padding: 10px 12px 10px 34px; outline: none; min-height: 40px; }
+  .search input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent); }
+  .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--muted); }
+  .modules { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px;
+    padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer; min-height: 32px; color: var(--ink); }
+  .chip .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--c); }
+  .chip[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 16%, var(--surface)); border-color: var(--c); }
+  .chip .n { color: var(--muted); font-weight: 500; font-family: var(--font-mono); font-size: 11px; }
+  /* En el celular, los módulos van en una sola fila que se desliza: la barra fija no tapa media pantalla. */
+  @media (max-width: 720px) {
+    .modules { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 10px; }
+    .modules::-webkit-scrollbar { display: none; }
+    .chip { flex: none; }
+    .lcard { scroll-margin-top: 190px; }
+  }
+
+  .view[hidden], .modules[hidden] { display: none !important; }
+
+  /* ── Lienzo ── */
+  .canvas-wrap { position: relative; height: calc(100vh - 150px); min-height: 520px; margin: 14px 0 0; border: 1px solid var(--line);
+    border-radius: 16px; overflow: hidden; background-color: var(--surface-2);
+    background-image: radial-gradient(var(--grid) 1.2px, transparent 1.2px); background-size: 22px 22px; touch-action: none; cursor: grab; }
+  .canvas-wrap.dragging { cursor: grabbing; }
+  .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden; }
+  .world.listo { visibility: visible; }
+  .world svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .zoom { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 5; }
+  .zoom .icon-btn { box-shadow: var(--shadow); }
+  .zoom .pct { min-width: 56px; font: 600 12px var(--font-mono); color: var(--muted); }
+  .hint { position: absolute; right: 12px; bottom: 12px; z-index: 5; font-size: 12px; color: var(--muted); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; box-shadow: var(--shadow); max-width: calc(100% - 260px); }
+  @media (max-width: 720px) { .hint { display: none; } }
+  .legend { position: absolute; left: 12px; top: 12px; z-index: 5; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 11.5px;
+    color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; box-shadow: var(--shadow); max-width: calc(100% - 24px); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .legend svg { width: 34px; height: 14px; }
+
+  .t { position: absolute; width: 268px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+    transition: opacity .18s ease, box-shadow .18s ease, border-color .18s ease; overflow: hidden; cursor: pointer; }
+  .t:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+  .t-head { padding: 9px 12px 8px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-bottom: 1px solid var(--line); border-top: 4px solid var(--c); }
+  .t-name { font: 700 13.5px var(--font-mono); display: flex; align-items: center; gap: 8px; }
+  .t-name .nm { min-width: 0; overflow-wrap: anywhere; }
+  .t-name .cnt { margin-left: auto; font: 500 10.5px var(--font-ui); color: var(--muted); }
+  .t-desc { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+  .t ul { list-style: none; margin: 0; padding: 3px 0; }
+  .t li { display: flex; align-items: center; gap: 7px; padding: 0 12px; height: 24px; font-size: 12px; }
+  .t li + li { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  .t li .k { width: 14px; flex: none; text-align: center; font: 700 10px var(--font-mono); }
+  .t li .k.pk { color: var(--pk); }
+  .t li .k.fk { color: var(--brand); }
+  .t li .n { font: 500 12px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t li .n.is-pk { color: var(--pk); font-weight: 700; }
+  .t li .ty { margin-left: auto; font: 400 10.5px var(--font-mono); color: var(--muted); white-space: nowrap; }
+  .t li .q { color: var(--muted); font: 500 10.5px var(--font-mono); }
+  .t li.hi { background: var(--brand-soft); }
+
+  .world.focus .t { opacity: .22; }
+  .world.focus .t.on, .world.focus .t.rel, .world.focus .t.match { opacity: 1; }
+  .world .t.on { box-shadow: 0 0 0 2px var(--c), var(--shadow-pop); border-color: var(--c); }
+  .world .t.rel { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 70%, transparent), var(--shadow); }
+  .world .t.match { box-shadow: 0 0 0 2px var(--brand), var(--shadow-pop); }
+
+  /* ── Panel de detalle ── */
+  .panel { position: absolute; top: 12px; right: 12px; bottom: 12px; width: 360px; max-width: calc(100% - 24px); z-index: 8;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop);
+    display: flex; flex-direction: column; transform: translateX(calc(100% + 24px)); transition: transform .22s ease; }
+  .panel.open { transform: none; }
+  @media (max-width: 720px) {
+    .panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-width: none; height: 62%; transform: translateY(calc(100% + 16px)); }
+  }
+  .panel-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); border-top: 5px solid var(--c); border-radius: 14px 14px 0 0; display: flex; gap: 10px; align-items: flex-start; }
+  .panel-head h2 { font: 700 17px var(--font-mono); margin: 0; overflow-wrap: anywhere; }
+  .panel-head .mod { font-size: 11px; font-weight: 700; color: var(--c); text-transform: uppercase; letter-spacing: .06em; }
+  .panel-head p { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .panel-body { overflow: auto; padding: 6px 16px 16px; touch-action: pan-y; }
+  .panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 16px 0 8px; }
+  .cols { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .cols td { padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+  .cols td:first-child { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+  .cols td:last-child { text-align: right; }
+  .cols .ty { font-family: var(--font-mono); color: var(--muted); font-size: 11px; }
+  .cols .vals { display: block; font: 400 10.5px var(--font-mono); color: var(--muted); margin-top: 2px; white-space: normal; }
+  .tag { display: inline-block; font: 700 9.5px var(--font-mono); padding: 1.5px 5px; border-radius: 4px; margin: 1px 0 1px 3px; }
+  .tag.pk { background: var(--pk-soft); color: var(--pk); }
+  .tag.fk { background: var(--brand-soft); color: var(--brand-ink); }
+  .tag.uq { border: 1px solid var(--line-strong); }
+  .tag.nul { color: var(--muted); border: 1px solid var(--line); }
+  .rels { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .rels button { width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 9px 10px;
+    cursor: pointer; display: flex; gap: 8px; align-items: center; font-size: 12.5px; min-height: 44px; }
+  .rels button:hover { border-color: var(--brand); }
+  .rels .card { font: 700 11px var(--font-mono); color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .rels .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--c); flex: none; }
+  .notes { margin: 0; padding: 0 0 0 18px; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+  .notes li + li { margin-top: 4px; }
+
+  /* ── Vista de tablas ── */
+  .list { padding: 18px 0 40px; }
+  .group { margin-top: 18px; }
+  .group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .group-head .bar-c { width: 6px; height: 22px; border-radius: 3px; background: var(--c); }
+  .group-head h2 { margin: 0; font-size: 17px; }
+  .group-head p { margin: 0; color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+  .lcard { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; scroll-margin-top: 140px; }
+  .lcard.flash { animation: flash 1.2s ease; }
+  @keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--brand), var(--shadow-pop); } 100% { box-shadow: var(--shadow); } }
+  .lcard h3 { margin: 0; font: 700 14px var(--font-mono); }
+  .lcard > p { margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .lcard .tag.fk { cursor: pointer; }
+  .lcard .notes { margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+  /* ── Reglas ── */
+  .rules { padding: 18px 0 40px; }
+  .rules h2 { font-size: 19px; margin: 20px 0 6px; }
+  .rules > .wrap > p { color: var(--muted); margin: 0 0 14px; font-size: 14px; max-width: 75ch; line-height: 1.55; }
+  .rule-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+  .rule { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; box-shadow: var(--shadow); }
+  .rule .rtag { font: 700 10.5px var(--font-mono); color: var(--brand-ink); background: var(--brand-soft); padding: 2px 7px; border-radius: 5px; display: inline-block; margin-bottom: 8px; }
+  .rule h3 { margin: 0 0 6px; font-size: 14px; }
+  .rule p { margin: 0; font-size: 13px; line-height: 1.55; }
+  .rule code { font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--line); padding: 0 4px; border-radius: 4px; }
+  .states { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+  .state-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
+  .state-card h3 { margin: 0 0 4px; font-size: 15px; }
+  .state-card > p { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .state-card svg { width: 100%; height: auto; display: block; }
+  .st-box { fill: var(--surface-2); stroke: var(--line-strong); }
+  .st-txt { font: 700 11px var(--font-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+  .st-lbl { font: 500 10px var(--font-ui); fill: var(--muted); text-anchor: middle; }
+  .st-arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+
+  footer { border-top: 1px solid var(--line); padding: 18px 0 32px; color: var(--muted); font-size: 12px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <div>
+        <span class="eyebrow">DocApp Go · Sprint 2 · Base de datos</span>
+        <h1>Modelo de datos de turnos y servicios médicos</h1>
+      </div>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Cambiar entre modo claro y oscuro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
+    </div>
+    <p class="sub">
+      SQLite + Prisma. Usuarios con login por DNI, cobertura por obra social y plan, hospitales del REFES,
+      profesionales con lugares de atención, turnos con estados, órdenes con indicaciones, resultados en PDF,
+      recetas y feedback. Tocá una tabla para ver sus relaciones y su detalle.
+    </p>
+    <div class="stats" id="stats"></div>
+  </div>
+</header>
+
+<div class="bar">
+  <div class="wrap">
+    <div class="bar-inner">
+      <div class="tabs" role="tablist" aria-label="Vistas">
+        <button class="tab" role="tab" data-view="diagrama" aria-selected="true" type="button">Diagrama</button>
+        <button class="tab" role="tab" data-view="tablas" aria-selected="false" type="button">Tablas</button>
+        <button class="tab" role="tab" data-view="reglas" aria-selected="false" type="button">Reglas y estados</button>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search" type="search" placeholder="Buscar tabla o columna…" autocomplete="off" aria-label="Buscar tabla o columna">
+      </div>
+    </div>
+    <div class="modules" id="modules" aria-label="Módulos"></div>
+  </div>
+</div>
+
+<main>
+  <section class="view" id="view-diagrama">
+    <div class="wrap">
+      <div class="canvas-wrap" id="canvas" aria-label="Diagrama entidad–relación. Arrastrá para moverte y usá la rueda o los botones para el zoom.">
+        <div class="legend" aria-hidden="true">
+          <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="currentColor" stroke-width="1.4"/><line x1="6" y1="2" x2="6" y2="12" stroke="currentColor" stroke-width="1.4"/><line x1="10" y1="2" x2="10" y2="12" stroke="currentColor" stroke-width="1.4"/></svg>uno</span>
+          <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="7" r="3" style="fill:var(--surface)" stroke="currentColor" stroke-width="1.4"/><line x1="16" y1="2" x2="16" y2="12" stroke="currentColor" stroke-width="1.4"/></svg>cero o uno</span>
+          <span><svg viewBox="0 0 34 14"><line x1="2" y1="7" x2="32" y2="7" stroke="currentColor" stroke-width="1.4"/><circle cx="7" cy="7" r="3" style="fill:var(--surface)" stroke="currentColor" stroke-width="1.4"/><path d="M14 7 L24 1 M14 7 L24 7 M14 7 L24 13" stroke="currentColor" stroke-width="1.4"/></svg>cero o muchos</span>
+          <span><b class="mono" style="color:var(--pk)">◆</b> PK</span>
+          <span><b class="mono" style="color:var(--brand)">↳</b> FK</span>
+          <span><b class="mono">?</b> puede ser nulo</span>
+        </div>
+        <div class="world" id="world">
+          <svg id="edgesBack" aria-hidden="true"></svg>
+          <svg id="edgesFront" aria-hidden="true" style="z-index:3"></svg>
+        </div>
+        <div class="zoom">
+          <button class="icon-btn" type="button" id="zoomOut" aria-label="Alejar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
+          <button class="icon-btn pct" type="button" id="zoomReset" aria-label="Zoom al 100 %">100%</button>
+          <button class="icon-btn" type="button" id="zoomIn" aria-label="Acercar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="icon-btn" type="button" id="zoomFit" aria-label="Ajustar el diagrama a la pantalla"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        </div>
+        <div class="hint">Arrastrá para moverte · rueda o pellizco para el zoom · tocá una tabla</div>
+        <aside class="panel" id="panel" aria-live="polite"></aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-tablas" hidden>
+    <div class="wrap list" id="list"></div>
+  </section>
+
+  <section class="view rules" id="view-reglas" hidden>
+    <div class="wrap">
+      <h2>Estados</h2>
+      <p>Solo los turnos y las órdenes guardan estado. El de las recetas se calcula y los resultados no tienen.</p>
+      <div class="states">
+        <div class="state-card">
+          <h3>Turno <code class="mono" style="font-size:12px">turnos.estado</code></h3>
+          <p>Nace <b>pendiente</b>. Lo confirma o rechaza el profesional; lo cancela el paciente. Al pasar la fecha, el confirmado se completa y el pendiente se rechaza solo.</p>
+          <svg viewBox="0 0 520 210" role="img" aria-label="Estados del turno: pendiente pasa a confirmado o rechazado por el médico, a cancelado por el paciente y a rechazado automáticamente al vencer; confirmado pasa a completado al vencer o a cancelado por el paciente.">
+            <defs><marker id="stA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" style="fill:var(--muted)"/></marker></defs>
+            <rect class="st-box" x="10" y="85" width="110" height="38" rx="10" style="stroke:var(--m-turnos)"/><text class="st-txt" x="65" y="104">pendiente</text>
+            <rect class="st-box" x="205" y="20" width="110" height="38" rx="10"/><text class="st-txt" x="260" y="39">confirmado</text>
+            <rect class="st-box" x="400" y="20" width="110" height="38" rx="10"/><text class="st-txt" x="455" y="39">completado</text>
+            <rect class="st-box" x="205" y="150" width="110" height="38" rx="10"/><text class="st-txt" x="260" y="169">rechazado</text>
+            <rect class="st-box" x="400" y="150" width="110" height="38" rx="10"/><text class="st-txt" x="455" y="169">cancelado</text>
+            <path class="st-arrow" d="M120 96 C160 80 170 45 205 40" marker-end="url(#stA)"/><text class="st-lbl" x="150" y="52">médico confirma</text>
+            <path class="st-arrow" d="M120 112 C160 128 170 165 205 168" marker-end="url(#stA)"/><text class="st-lbl" x="150" y="160">rechaza / vence</text>
+            <path class="st-arrow" d="M315 39 L400 39" marker-end="url(#stA)"/><text class="st-lbl" x="357" y="31">vence</text>
+            <path class="st-arrow" d="M120 104 C250 110 330 120 400 162" marker-end="url(#stA)"/><text class="st-lbl" x="300" y="106">paciente cancela</text>
+            <path class="st-arrow" d="M300 58 C340 100 380 130 420 150" marker-end="url(#stA)"/><text class="st-lbl" x="395" y="92">cancela</text>
+          </svg>
+        </div>
+        <div class="state-card">
+          <h3>Orden <code class="mono" style="font-size:12px">ordenes.estado</code></h3>
+          <p>Pasa a <b>listo</b> cuando el laboratorio carga el primer resultado, en la misma transacción.</p>
+          <svg viewBox="0 0 520 120" role="img" aria-label="Estados de la orden: pendiente pasa a listo con el primer resultado.">
+            <rect class="st-box" x="40" y="40" width="130" height="40" rx="10" style="stroke:var(--m-estudios)"/><text class="st-txt" x="105" y="60">pendiente</text>
+            <rect class="st-box" x="350" y="40" width="130" height="40" rx="10"/><text class="st-txt" x="415" y="60">listo</text>
+            <path class="st-arrow" d="M170 60 L350 60" marker-end="url(#stA)"/><text class="st-lbl" x="260" y="50">llega el primer resultado</text>
+          </svg>
+          <p style="margin-top:10px"><b>Receta:</b> activa si <code class="mono">vigenteHasta &gt;= hoy</code>, si no pasada (calculado, no se guarda).<br><b>Resultado:</b> sin estado; el "Nuevo" es solo del frontend.</p>
+        </div>
+      </div>
+
+      <h2>Cómo cada regla queda en la base</h2>
+      <p>Las reglas de negocio del proyecto y del Sprint 2 traducidas a restricciones concretas. La base es la última barrera: los servicios también las verifican.</p>
+      <div class="rule-grid" id="rules"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>DocApp Go — Programación de Apps Móviles (UCA). Detalle en <code>docs/03-base-de-datos.md</code>.</span>
+    <span>Ids UUID · fechas de negocio en texto ISO · timestamps en UTC · tablas snake_case, columnas como el frontend.</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  // ───────────────────────── Datos ─────────────────────────
+  // c(nombre, tipo, opciones): pk, fk (tabla destino), uq, nul, def, vals (valores permitidos), nota.
+  const c = (n, t, o = {}) => ({ n, t, ...o });
+
+  const MODULOS = [
+    { key: "identidad", nombre: "Identidad y seguridad", desc: "Login por DNI, tokens de sesión, auditoría y claves de terceros." },
+    { key: "pacientes", nombre: "Pacientes", desc: "Datos del paciente, su plan y sus favoritos." },
+    { key: "profesionales", nombre: "Profesionales", desc: "Padrón, perfil, especialidades, lugares de atención y notas." },
+    { key: "turnos", nombre: "Turnos", desc: "Reservas con estado y combinación única." },
+    { key: "recetas", nombre: "Recetas, feedback y avisos", desc: "Recetas, calificación de turnos y notificaciones." },
+    { key: "instituciones", nombre: "Instituciones", desc: "Hospitales: nombre, dirección, latitud y longitud." },
+    { key: "cobertura", nombre: "Cobertura", desc: "Obras sociales, planes y qué planes acepta cada institución." },
+    { key: "estudios", nombre: "Estudios", desc: "Órdenes con indicaciones, estudios pedidos y resultados en PDF." },
+  ];
+
+  const TABLAS = [
+    { key: "usuarios", mod: "identidad", desc: "Cuenta de cualquier rol. Login único con DNI + contraseña (regla 11).", cols: [
+      c("id", "TEXT", { pk: true }),
+      c("dni", "TEXT", { uq: true, nota: "\"admin\" para la cuenta de administración" }),
+      c("passwordHash", "TEXT", { nota: "scrypt (salt:hash), nunca en texto plano" }),
+      c("rol", "TEXT", { vals: "paciente | doctor | admin" }),
+      c("nombre", "TEXT"), c("apellido", "TEXT"),
+      c("activo", "BOOLEAN", { def: "true" }),
+      c("creadoEn", "DATETIME", { def: "now()" }), c("actualizadoEn", "DATETIME"),
+    ], notas: ["El rol lo determina la cuenta: no se elige al entrar.", "pacientes y medicos extienden esta tabla (1 a 0..1); el admin no tiene fila extra."] },
+
+    { key: "sesiones", mod: "identidad", desc: "Tokens de sesión. Solo se guarda su hash.", cols: [
+      c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios" }),
+      c("tokenHash", "TEXT", { uq: true, nota: "SHA-256 del token" }),
+      c("creadaEn", "DATETIME", { def: "now()" }), c("expiraEn", "DATETIME"), c("ultimoUsoEn", "DATETIME"),
+      c("revocadaEn", "DATETIME", { nul: true }), c("dispositivo", "TEXT", { nul: true }), c("ip", "TEXT", { nul: true }),
+    ], notas: ["El token viaja en cada pedido: Authorization: Bearer.", "Logout o cambio de contraseña → revocadaEn."] },
+
+    { key: "registro_auditoria", mod: "identidad", desc: "Acciones importantes del sistema (§11).", cols: [
+      c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios", nul: true }),
+      c("accion", "TEXT"), c("entidad", "TEXT", { nul: true }), c("entidadId", "TEXT", { nul: true }),
+      c("detalle", "TEXT", { nul: true }), c("ip", "TEXT", { nul: true }), c("creadoEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Logins, cancelaciones, descargas de PDF (regla 8) y altas del admin."] },
+
+    { key: "notificaciones", mod: "recetas", desc: "Aviso para un usuario de cualquier rol.", cols: [
+      c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios" }),
+      c("tipo", "TEXT", { vals: "recordatorio_turno | turno_confirmado | turno_rechazado | turno_cancelado | resultado_disponible | nueva_receta | nueva_orden" }),
+      c("titulo", "TEXT"), c("mensaje", "TEXT"), c("leida", "BOOLEAN", { def: "false" }),
+      c("referenciaTipo", "TEXT", { nul: true, vals: "turno | orden | resultado | receta" }), c("referenciaId", "TEXT", { nul: true }),
+      c("creadaEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Las genera el servidor en la misma transacción que el cambio que avisan."] },
+
+    { key: "profesionales_padron", mod: "profesionales", desc: "Copia del padrón nacional de profesionales de la salud.", cols: [
+      c("id", "TEXT", { pk: true }), c("codigoProfesional", "TEXT", { uq: true }),
+      c("dni", "TEXT"), c("nombre", "TEXT"), c("apellido", "TEXT"), c("profesion", "TEXT"),
+      c("especializaciones", "TEXT", { nota: "JSON: [\"Cardiología\"]" }), c("emisor", "TEXT"), c("provincia", "TEXT"),
+      c("matricula", "TEXT"), c("estadoMatricula", "TEXT"), c("activo", "BOOLEAN"),
+    ], notas: ["UNIQUE (dni, matricula, profesion): la terna del registro de profesional (regla 13)."] },
+
+    { key: "medicos_planes", mod: "profesionales", desc: "Planes que acepta cada profesional (regla 1).", cols: [
+      c("medicoId", "TEXT", { pk: true, fk: "medicos" }), c("planMedicoId", "TEXT", { pk: true, fk: "planes_medicos" }),
+    ] },
+
+    { key: "planes_medicos", mod: "cobertura", desc: "Plan de una obra social (\"OSDE 210\"). Filtro transversal de la app.", cols: [
+      c("id", "TEXT", { pk: true }), c("obraSocialId", "TEXT", { fk: "obras_sociales" }),
+      c("nombre", "TEXT"), c("activo", "BOOLEAN", { def: "true" }),
+    ], notas: ["UNIQUE (obraSocialId, nombre)."] },
+
+    { key: "obras_sociales", mod: "cobertura", desc: "Obra social o prepaga. La carga el admin.", cols: [
+      c("id", "TEXT", { pk: true }), c("nombre", "TEXT", { uq: true }),
+      c("registro", "TEXT", { nul: true, vals: "RNAS | RNEMP | otro" }), c("codigoOficial", "TEXT", { nul: true }),
+      c("activa", "BOOLEAN", { def: "true" }),
+    ] },
+
+    { key: "pacientes", mod: "pacientes", desc: "Paciente: se identifica por DNI (en usuarios) y tiene un plan.", cols: [
+      c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios", uq: true }),
+      c("planMedicoId", "TEXT", { fk: "planes_medicos" }),
+      c("numeroAfiliado", "TEXT", { nul: true }), c("email", "TEXT", { nul: true }), c("telefono", "TEXT", { nul: true }),
+    ], notas: ["planMedicoId decide qué hospitales, profesionales y turnos ve.", "numeroAfiliado, email y telefono están reservados: hoy no se piden."] },
+
+    { key: "pacientes_medicos_favoritos", mod: "pacientes", desc: "Profesionales favoritos del paciente.", cols: [
+      c("pacienteId", "TEXT", { pk: true, fk: "pacientes" }), c("medicoId", "TEXT", { pk: true, fk: "medicos" }),
+    ] },
+
+    { key: "medicos", mod: "profesionales", desc: "Perfil profesional: datos del registro + lugares de atención.", cols: [
+      c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios", uq: true }),
+      c("padronId", "TEXT", { fk: "profesionales_padron", uq: true, nul: true }),
+      c("matricula", "TEXT"), c("profesion", "TEXT", { nota: "\"Médico\", \"Enfermero\", …" }),
+      c("genero", "TEXT", { vals: "femenino | masculino" }),
+      c("especialidadId", "TEXT", { fk: "especialidades" }), c("subespecialidadId", "TEXT", { fk: "subespecialidades", nul: true }),
+      c("descripcion", "TEXT"), c("aniosExperiencia", "INTEGER", { nul: true }), c("avatarUrl", "TEXT", { nul: true }),
+    ], notas: ["Sin horarios de atención (Sprint 2): la disponibilidad la resuelven los turnos.", "La valoración se calcula de feedbacks.", "UNIQUE (matricula, profesion)."] },
+
+    { key: "especialidades", mod: "profesionales", desc: "Especialidad médica.", cols: [
+      c("id", "TEXT", { pk: true }), c("nombre", "TEXT", { uq: true }),
+    ] },
+
+    { key: "subespecialidades", mod: "profesionales", desc: "Subespecialidad dentro de una especialidad.", cols: [
+      c("id", "TEXT", { pk: true }), c("especialidadId", "TEXT", { fk: "especialidades" }), c("nombre", "TEXT"),
+    ] },
+
+    { key: "notas_paciente", mod: "profesionales", desc: "Nota privada de un profesional sobre un paciente.", cols: [
+      c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }), c("pacienteId", "TEXT", { fk: "pacientes" }),
+      c("texto", "TEXT"), c("creadaEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Solo la ve quien la escribió."] },
+
+    { key: "turnos", mod: "turnos", desc: "Reserva de un paciente con un profesional, en un hospital.", cols: [
+      c("id", "TEXT", { pk: true }),
+      c("pacienteId", "TEXT", { fk: "pacientes" }), c("medicoId", "TEXT", { fk: "medicos" }),
+      c("sedeId", "TEXT", { fk: "sedes" }), c("especialidadId", "TEXT", { fk: "especialidades" }),
+      c("fecha", "TEXT", { nota: "yyyy-MM-dd" }), c("hora", "TEXT", { nota: "HH:mm" }),
+      c("estado", "TEXT", { def: "pendiente", vals: "pendiente | confirmado | rechazado | cancelado | completado" }),
+      c("ocultoEnHistorial", "BOOLEAN", { def: "false" }),
+      c("creadoEn", "DATETIME", { def: "now()" }), c("actualizadoEn", "DATETIME"),
+      c("respondidoEn", "DATETIME", { nul: true }), c("canceladoEn", "DATETIME", { nul: true }),
+    ], notas: ["UNIQUE parcial (fecha, hora, sedeId, especialidadId, medicoId) entre pendientes y confirmados: no hay doble reserva y un cancelado o rechazado libera el horario.", "Vencimiento automático: confirmado → completado, pendiente → rechazado.", "Sin tipo de consulta (se eliminó en el Sprint 2)."] },
+
+    { key: "feedbacks", mod: "recetas", desc: "Calificación de un turno completado.", cols: [
+      c("id", "TEXT", { pk: true }), c("turnoId", "TEXT", { fk: "turnos", uq: true }),
+      c("estrellas", "INTEGER", { vals: "1 a 5" }), c("puntualidad", "INTEGER"), c("atencion", "INTEGER"), c("trato", "INTEGER"),
+      c("claridadExplicacion", "INTEGER"), c("experienciaGeneral", "INTEGER"),
+      c("comentario", "TEXT", { nul: true }), c("oculto", "BOOLEAN", { def: "false", nota: "moderación del admin" }),
+      c("creadoEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Uno por turno completado (regla 6). El profesional sale del turno."] },
+
+    { key: "recetas", mod: "recetas", desc: "Nombre + dosis + cómo tomarla + duración + indicación + médico + fecha de emisión.", cols: [
+      c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }), c("pacienteId", "TEXT", { fk: "pacientes" }),
+      c("fecha", "TEXT", { nota: "emisión" }), c("medicacion", "TEXT", { nota: "nombre" }), c("dosis", "TEXT"),
+      c("frecuencia", "TEXT", { nota: "cómo tomarla" }), c("duracionDias", "INTEGER", { vals: "1 a 365" }),
+      c("vigenteHasta", "TEXT", { nota: "fecha + duracionDias" }),
+      c("indicaciones", "TEXT", { nul: true }), c("observaciones", "TEXT", { nul: true }),
+      c("archivadoEl", "TEXT", { nul: true }), c("creadaEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Activa / pasada se calcula con vigenteHasta (no se guarda).", "Solo las pasadas se archivan."] },
+
+    { key: "pacientes_instituciones_favoritas", mod: "pacientes", desc: "Hospitales favoritos del paciente.", cols: [
+      c("pacienteId", "TEXT", { pk: true, fk: "pacientes" }), c("institucionId", "TEXT", { pk: true, fk: "instituciones" }),
+    ] },
+
+    { key: "instituciones", mod: "instituciones", desc: "Hospital, clínica, centro médico o laboratorio.", cols: [
+      c("id", "TEXT", { pk: true }), c("nombre", "TEXT"),
+      c("tipo", "TEXT", { vals: "hospital | clinica | centro_medico | laboratorio" }),
+      c("origen", "TEXT", { vals: "publico | privado | seguridad_social" }),
+      c("logoUrl", "TEXT", { nul: true }), c("sitioWeb", "TEXT", { nul: true }),
+      c("activa", "BOOLEAN", { def: "true" }), c("creadaEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Una pública se ve para todos (regla 15); una privada, si acepta el plan (regla 1)."] },
+
+    { key: "sedes", mod: "instituciones", desc: "Ubicación: nombre + dirección + latitud + longitud.", cols: [
+      c("id", "TEXT", { pk: true }), c("institucionId", "TEXT", { fk: "instituciones" }),
+      c("nombre", "TEXT"), c("direccion", "TEXT"), c("ciudad", "TEXT"),
+      c("latitud", "REAL"), c("longitud", "REAL"),
+      c("telefono", "TEXT", { nul: true }), c("refesId", "TEXT", { uq: true, nul: true, nota: "código del REFES" }),
+    ], notas: ["Alimentan los marcadores del mapa.", "Hoy, una por institución (las del REFES)."] },
+
+    { key: "medicos_sedes", mod: "profesionales", desc: "Lugares de atención de cada profesional.", cols: [
+      c("medicoId", "TEXT", { pk: true, fk: "medicos" }), c("sedeId", "TEXT", { pk: true, fk: "sedes" }),
+    ] },
+
+    { key: "instituciones_planes", mod: "cobertura", desc: "Qué planes acepta cada institución privada.", cols: [
+      c("institucionId", "TEXT", { pk: true, fk: "instituciones" }), c("planMedicoId", "TEXT", { pk: true, fk: "planes_medicos" }),
+      c("fuenteUrl", "TEXT", { nul: true, nota: "cartilla consultada" }), c("verificadoEl", "TEXT", { nul: true }),
+    ], notas: ["No hay fuente pública: se carga a mano desde cada cartilla."] },
+
+    { key: "ordenes", mod: "estudios", desc: "Orden que el médico asigna al paciente: hospital + fecha + médico + indicaciones.", cols: [
+      c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }), c("pacienteId", "TEXT", { fk: "pacientes" }),
+      c("institucionId", "TEXT", { fk: "instituciones" }), c("fecha", "TEXT", { nota: "emisión" }),
+      c("indicaciones", "TEXT"), c("estado", "TEXT", { def: "pendiente", vals: "pendiente | listo" }),
+      c("archivadoEl", "TEXT", { nul: true }), c("creadaEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Pasa a listo con el primer resultado.", "medicoId obligatorio: queda asociada a quien la emitió (regla 7)."] },
+
+    { key: "orden_estudios", mod: "estudios", desc: "Cada estudio pedido en una orden.", cols: [
+      c("id", "TEXT", { pk: true }), c("ordenId", "TEXT", { fk: "ordenes" }),
+      c("nombre", "TEXT", { nota: "\"Hemograma completo\"" }), c("posicion", "INTEGER"),
+    ], notas: ["UNIQUE (ordenId, posicion)."] },
+
+    { key: "resultados", mod: "estudios", desc: "Médico (de la orden) + fecha + hospital + orden + PDF. Sin estado.", cols: [
+      c("id", "TEXT", { pk: true }), c("ordenId", "TEXT", { fk: "ordenes" }),
+      c("institucionId", "TEXT", { fk: "instituciones", nota: "dónde se hizo" }),
+      c("tipo", "TEXT"), c("fecha", "TEXT"),
+      c("archivoRuta", "TEXT", { uq: true, nota: "en uploads/, nunca público" }), c("archivoBytes", "INTEGER"), c("archivoSha256", "TEXT"),
+      c("claveIntegracionId", "TEXT", { fk: "claves_integracion", nul: true }),
+      c("archivadoEl", "TEXT", { nul: true }), c("cargadoEn", "DATETIME", { def: "now()" }),
+    ], notas: ["Los carga un tercero (laboratorio), no el médico ni el admin.", "El aviso \"Nuevo\" del paciente es solo del frontend.", "PDF visible solo para el paciente y el médico de la orden (regla 8)."] },
+
+    { key: "claves_integracion", mod: "identidad", desc: "Credencial del tercero que carga los PDF.", cols: [
+      c("id", "TEXT", { pk: true }), c("institucionId", "TEXT", { fk: "instituciones" }),
+      c("nombre", "TEXT"), c("claveHash", "TEXT", { uq: true }), c("activa", "BOOLEAN", { def: "true" }),
+      c("creadaEn", "DATETIME", { def: "now()" }), c("ultimoUsoEn", "DATETIME", { nul: true }),
+    ], notas: ["Header X-Clave-Integracion. Solo carga resultados de órdenes de su institución."] },
+  ];
+
+  // Columnas del lienzo: así quedan juntas las tablas que se relacionan más.
+  const LAYOUT = [
+    ["sesiones", "registro_auditoria", "notificaciones"],
+    ["usuarios", "profesionales_padron", "medicos_planes", "planes_medicos", "obras_sociales"],
+    ["pacientes", "pacientes_medicos_favoritos", "medicos", "especialidades", "subespecialidades"],
+    ["notas_paciente", "turnos", "feedbacks", "recetas"],
+    ["pacientes_instituciones_favoritas", "instituciones", "sedes", "medicos_sedes", "instituciones_planes"],
+    ["ordenes", "orden_estudios", "resultados", "claves_integracion"],
+  ];
+  const ANCHO = 268, PASO_X = 380, GAP_Y = 34;
+
+  const REGLAS = [
+    { tag: "Sprint 2 · Regla 4", t: "Turno único", p: "Índice único parcial sobre <code>(fecha, hora, sedeId, especialidadId, medicoId)</code> con <code>estado IN ('pendiente','confirmado')</code>: no hay doble reserva y un turno cancelado o rechazado libera el horario." },
+    { tag: "Sprint 2", t: "Estados del turno", p: "<code>turnos.estado</code> solo acepta pendiente, confirmado, rechazado, cancelado y completado (trigger). Todo turno nace <code>pendiente</code>." },
+    { tag: "Sprint 2", t: "Todo se archiva", p: "<code>archivadoEl</code> en <code>ordenes</code>, <code>resultados</code> y <code>recetas</code>. Null = no archivado; la fecha define la carpeta año → mes." },
+    { tag: "Sprint 2", t: "Resultados sin estado", p: "<code>resultados</code> no tiene columna de estado. El \"Nuevo\" que ve el paciente se guarda en el teléfono." },
+    { tag: "Sprint 2", t: "Perfil sin horarios", p: "No hay tabla de horarios de atención. Los lugares de atención del perfil son <code>medicos_sedes</code>." },
+    { tag: "Reglas 1 y 15", t: "Hospitales por obra social", p: "Se ve una institución si <code>origen = 'publico'</code> o si hay fila en <code>instituciones_planes</code> para el plan del paciente." },
+    { tag: "Regla 6", t: "Feedback de turnos cumplidos", p: "<code>feedbacks.turnoId</code> obligatorio y <code>UNIQUE</code>: un feedback por turno. El servicio exige que esté completado." },
+    { tag: "Regla 7", t: "Órdenes y recetas con autor", p: "<code>ordenes.medicoId</code> y <code>recetas.medicoId</code> son obligatorios y sin cascada: siempre queda quién las emitió." },
+    { tag: "Regla 8", t: "Resultados protegidos", p: "El PDF vive fuera de la carpeta pública; solo se descarga con token del paciente o del médico de la orden, y cada descarga va a <code>registro_auditoria</code>." },
+    { tag: "Regla 11", t: "Login único por DNI", p: "<code>usuarios.dni</code> es <code>UNIQUE</code> y <code>usuarios.rol</code> decide el modo. El admin usa el DNI \"admin\"." },
+    { tag: "Regla 13", t: "Registro contra el padrón", p: "<code>profesionales_padron</code> con <code>UNIQUE (dni, matricula, profesion)</code>; <code>medicos.padronId</code> guarda con qué ficha se verificó." },
+    { tag: "§11", t: "Contraseñas y tokens", p: "<code>passwordHash</code> con scrypt y <code>sesiones.tokenHash</code> con SHA-256: la base nunca guarda el valor original." },
+  ];
+
+  // ───────────────────────── Utilidades ─────────────────────────
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, props = {}, html = "") => Object.assign(document.createElement(tag), props, html ? { innerHTML: html } : {});
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  const modDe = Object.fromEntries(MODULOS.map((m) => [m.key, m]));
+  const tablaDe = Object.fromEntries(TABLAS.map((t) => [t.key, t]));
+  const colorMod = (key) => `var(--m-${key})`;
+
+  // Relaciones: una por cada FK. uno-a-uno si la FK es UNIQUE y no es parte de una PK compuesta.
+  const RELS = [];
+  TABLAS.forEach((t) => t.cols.forEach((col) => {
+    if (!col.fk) return;
+    RELS.push({ desde: t.key, col: col.n, hacia: col.fk, unoAUno: !!col.uq && !col.pk, opcional: !!col.nul });
+  }));
+
+  const card = (r) => (r.unoAUno ? "1 : 0..1" : "1 : N");
+
+  // ───────────────────────── Encabezado ─────────────────────────
+  $("#stats").innerHTML = [
+    [TABLAS.length, "tablas"], [RELS.length, "relaciones"], [MODULOS.length, "módulos"],
+    [TABLAS.reduce((n, t) => n + t.cols.length, 0), "columnas"],
+  ].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("");
+
+  const modulesEl = $("#modules");
+  let moduloActivo = null;
+  MODULOS.forEach((m) => {
+    const n = TABLAS.filter((t) => t.mod === m.key).length;
+    const b = el("button", { type: "button", className: "chip" }, `<span class="dot"></span>${esc(m.nombre)} <span class="n">${n}</span>`);
+    b.style.setProperty("--c", colorMod(m.key));
+    b.setAttribute("aria-pressed", "false");
+    b.title = m.desc;
+    b.addEventListener("click", () => {
+      moduloActivo = moduloActivo === m.key ? null : m.key;
+      modulesEl.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", "false"));
+      if (moduloActivo) b.setAttribute("aria-pressed", "true");
+      aplicarResaltado();
+      if (vista === "tablas" && moduloActivo) document.getElementById(`grupo-${moduloActivo}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    b.dataset.mod = m.key;
+    modulesEl.appendChild(b);
+  });
+
+  // ───────────────────────── Lienzo ─────────────────────────
+  const canvas = $("#canvas"), world = $("#world"), back = $("#edgesBack"), front = $("#edgesFront"), panel = $("#panel");
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const nodos = {};
+
+  TABLAS.forEach((t) => {
+    const n = el("div", { className: "t", tabIndex: 0 });
+    n.style.setProperty("--c", colorMod(t.mod));
+    n.dataset.key = t.key;
+    n.setAttribute("role", "button");
+    n.setAttribute("aria-label", `Tabla ${t.key}, ${t.cols.length} columnas. Ver detalle`);
+    n.innerHTML = `
+      <div class="t-head"><div class="t-name"><span class="nm">${esc(t.key)}</span><span class="cnt">${t.cols.length}</span></div><div class="t-desc">${esc(t.desc)}</div></div>
+      <ul>${t.cols.map((col) => `
+        <li data-col="${esc(col.n)}">
+          <span class="k ${col.pk ? "pk" : col.fk ? "fk" : ""}">${col.pk ? "◆" : col.fk ? "↳" : ""}</span>
+          <span class="n ${col.pk ? "is-pk" : ""}">${esc(col.n)}</span>${col.nul ? '<span class="q">?</span>' : ""}
+          <span class="ty">${esc(col.t)}${col.uq ? " · U" : ""}</span>
+        </li>`).join("")}</ul>`;
+    world.appendChild(n);
+    nodos[t.key] = n;
+  });
+
+  // Posiciones: x por columna, y apilando las alturas reales de las tarjetas.
+  const pos = {};
+  let anchoMundo = 0, altoMundo = 0;
+  function ubicar() {
+    const alturas = LAYOUT.map((col) => col.reduce((h, k) => h + nodos[k].offsetHeight, 0) + GAP_Y * (col.length - 1));
+    const maxAlto = Math.max(...alturas);
+    LAYOUT.forEach((col, i) => {
+      let y = Math.round((maxAlto - alturas[i]) / 2); // cada columna centrada en vertical
+      col.forEach((k) => {
+        pos[k] = { x: i * PASO_X, y, w: ANCHO, h: nodos[k].offsetHeight };
+        Object.assign(nodos[k].style, { left: `${pos[k].x}px`, top: `${y}px` });
+        y += nodos[k].offsetHeight + GAP_Y;
+      });
+    });
+    anchoMundo = (LAYOUT.length - 1) * PASO_X + ANCHO;
+    altoMundo = maxAlto;
+    [back, front].forEach((s) => { s.setAttribute("width", anchoMundo); s.setAttribute("height", altoMundo); });
+    world.style.width = `${anchoMundo}px`;
+    world.style.height = `${altoMundo}px`;
+  }
+
+  // Marcadores pata de gallo: "uno" (||), "cero o uno" (o|), "cero o muchos" (o<).
+  function marcadores(svg, sufijo, color) {
+    const defs = document.createElementNS(SVGNS, "defs");
+    const mk = (id, cuerpo) => `<marker id="${id}${sufijo}" viewBox="0 -8 22 16" refX="22" refY="0" markerWidth="22" markerHeight="16" markerUnits="userSpaceOnUse" orient="auto-start-reverse">${cuerpo}</marker>`;
+    // Colores con style (no atributos): las variables CSS del tema no son confiables en atributos de SVG.
+    const s = `style="stroke:${color};stroke-width:1.5;fill:none"`;
+    const circulo = (cx) => `<circle cx="${cx}" cy="0" r="3.2" style="fill:var(--surface);stroke:${color};stroke-width:1.5"/>`;
+    defs.innerHTML =
+      mk("uno", `<path d="M12 -6V6 M16 -6V6" ${s}/>`) +
+      mk("ceroUno", `${circulo(8)}<path d="M16 -6V6" ${s}/>`) +
+      mk("muchos", `${circulo(5)}<path d="M11 0L22 -6M11 0L22 0M11 0L22 6" ${s}/>`);
+    svg.appendChild(defs);
+  }
+  marcadores(back, "B", "var(--edge)");
+  marcadores(front, "F", "var(--edge-hi)");
+
+  // Punto de anclaje: el centro vertical de la fila de la columna, en el borde izquierdo o derecho.
+  function ancla(tabla, col, lado) {
+    const li = nodos[tabla].querySelector(`li[data-col="${CSS.escape(col)}"]`);
+    const p = pos[tabla];
+    return { x: lado === "der" ? p.x + p.w : p.x, y: p.y + li.offsetTop + li.offsetHeight / 2 };
+  }
+
+  function camino(r) {
+    const a = pos[r.desde], b = pos[r.hacia];
+    let p1, p2, d1, d2;
+    if (a.x === b.x) {
+      // Misma columna: sale y entra por la izquierda, con una curva hacia afuera.
+      p1 = ancla(r.desde, r.col, "izq"); p2 = ancla(r.hacia, "id", "izq");
+      const dx = 46 + Math.min(60, Math.abs(p2.y - p1.y) * 0.08);
+      return `M${p1.x} ${p1.y} C${p1.x - dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`;
+    }
+    const derecha = b.x > a.x;
+    p1 = ancla(r.desde, r.col, derecha ? "der" : "izq");
+    p2 = ancla(r.hacia, "id", derecha ? "izq" : "der");
+    const dx = Math.max(60, Math.abs(p2.x - p1.x) * 0.42);
+    d1 = derecha ? dx : -dx; d2 = derecha ? -dx : dx;
+    return `M${p1.x} ${p1.y} C${p1.x + d1} ${p1.y}, ${p2.x + d2} ${p2.y}, ${p2.x} ${p2.y}`;
+  }
+
+  function dibujar(svg, rels, sufijo, ancho, opacidad) {
+    svg.querySelectorAll("path.e").forEach((p) => p.remove());
+    rels.forEach((r) => {
+      const p = document.createElementNS(SVGNS, "path");
+      p.setAttribute("class", "e");
+      p.setAttribute("d", camino(r));
+      p.style.fill = "none";
+      p.style.stroke = sufijo === "F" ? "var(--edge-hi)" : "var(--edge)";
+      p.style.strokeWidth = ancho;
+      p.style.opacity = opacidad;
+      p.setAttribute("marker-start", `url(#${r.unoAUno ? "ceroUno" : "muchos"}${sufijo})`);
+      p.setAttribute("marker-end", `url(#${r.opcional ? "ceroUno" : "uno"}${sufijo})`);
+      svg.appendChild(p);
+    });
+  }
+
+  // ───────────────────────── Zoom y desplazamiento ─────────────────────────
+  let vista = "diagrama";
+  const cam = { x: 0, y: 0, k: 1 };
+  const K_MIN = 0.25, K_MAX = 2.2;
+  function aplicarCam() {
+    world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`;
+    $("#zoomReset").textContent = `${Math.round(cam.k * 100)}%`;
+  }
+  function zoomEn(px, py, factor) {
+    const k = Math.min(K_MAX, Math.max(K_MIN, cam.k * factor));
+    cam.x = px - ((px - cam.x) * k) / cam.k;
+    cam.y = py - ((py - cam.y) * k) / cam.k;
+    cam.k = k;
+    aplicarCam();
+  }
+  function ajustar() {
+    const r = canvas.getBoundingClientRect();
+    const margen = 28, arriba = window.innerWidth < 720 ? 96 : 60;
+    const k = Math.min((r.width - margen * 2) / anchoMundo, (r.height - arriba - margen) / altoMundo, 1);
+    cam.k = Math.max(K_MIN, k);
+    cam.x = (r.width - anchoMundo * cam.k) / 2;
+    cam.y = arriba + Math.max(0, (r.height - arriba - margen - altoMundo * cam.k) / 2);
+    aplicarCam();
+  }
+  // Lleva la tabla al centro de lo que queda visible al lado del panel. Con `acercar`, además hace zoom.
+  function centrarEn(key, acercar = false) {
+    const r = canvas.getBoundingClientRect(), p = pos[key];
+    const k = acercar ? Math.max(cam.k, 0.7) : cam.k;
+    const anchoLibre = panel.classList.contains("open") && window.innerWidth >= 720 ? r.width - 384 : r.width;
+    cam.k = k;
+    cam.x = anchoLibre / 2 - (p.x + p.w / 2) * k;
+    cam.y = (window.innerWidth < 720 ? r.height * 0.22 : r.height / 2) - (p.y + Math.min(p.h, 300) / 2) * k;
+    world.style.transition = "transform .35s ease";
+    aplicarCam();
+    setTimeout(() => (world.style.transition = ""), 380);
+  }
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    zoomEn(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+  }, { passive: false });
+
+  // Arrastre con mouse, dedo o lápiz; dos dedos = pellizco.
+  const punteros = new Map();
+  let arrastre = null, pellizco = null, seMovio = false;
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".panel, .zoom, .legend")) return;
+    punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (punteros.size === 1) {
+      arrastre = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y };
+      seMovio = false;
+    } else if (punteros.size === 2) {
+      const [a, b] = [...punteros.values()];
+      pellizco = { d: Math.hypot(a.x - b.x, a.y - b.y), k: cam.k };
+      arrastre = null;
+    }
+  });
+  window.addEventListener("pointermove", (e) => {
+    if (!punteros.has(e.pointerId)) return;
+    punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pellizco && punteros.size === 2) {
+      const [a, b] = [...punteros.values()];
+      const r = canvas.getBoundingClientRect();
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      zoomEn((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, (pellizco.k * (d / pellizco.d)) / cam.k);
+      seMovio = true;
+    } else if (arrastre) {
+      const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
+      if (!seMovio && Math.hypot(dx, dy) > 4) { seMovio = true; canvas.classList.add("dragging"); canvas.setPointerCapture?.(e.pointerId); }
+      if (seMovio) { cam.x = arrastre.cx + dx; cam.y = arrastre.cy + dy; aplicarCam(); }
+    }
+  });
+  const soltar = (e) => {
+    punteros.delete(e.pointerId);
+    if (punteros.size < 2) pellizco = null;
+    if (punteros.size === 0) { arrastre = null; canvas.classList.remove("dragging"); }
+  };
+  window.addEventListener("pointerup", soltar);
+  window.addEventListener("pointercancel", soltar);
+
+  $("#zoomIn").addEventListener("click", () => { const r = canvas.getBoundingClientRect(); zoomEn(r.width / 2, r.height / 2, 1.2); });
+  $("#zoomOut").addEventListener("click", () => { const r = canvas.getBoundingClientRect(); zoomEn(r.width / 2, r.height / 2, 1 / 1.2); });
+  $("#zoomReset").addEventListener("click", () => { const r = canvas.getBoundingClientRect(); zoomEn(r.width / 2, r.height / 2, 1 / cam.k); });
+  $("#zoomFit").addEventListener("click", ajustar);
+
+  // ───────────────────────── Selección y resaltado ─────────────────────────
+  let seleccion = null, busqueda = "";
+
+  function relacionesDe(key) { return RELS.filter((r) => r.desde === key || r.hacia === key); }
+
+  function aplicarResaltado() {
+    const activos = new Set();
+    let rels = [];
+    if (seleccion) {
+      rels = relacionesDe(seleccion);
+      activos.add(seleccion);
+      rels.forEach((r) => { activos.add(r.desde); activos.add(r.hacia); });
+    }
+    const coincidencias = new Set(TABLAS.filter((t) => busqueda && (t.key.includes(busqueda) || t.cols.some((col) => col.n.toLowerCase().includes(busqueda)))).map((t) => t.key));
+    const delModulo = new Set(TABLAS.filter((t) => t.mod === moduloActivo).map((t) => t.key));
+    if (!seleccion && moduloActivo) rels = RELS.filter((r) => delModulo.has(r.desde) || delModulo.has(r.hacia));
+
+    const hayFoco = !!seleccion || coincidencias.size > 0 || !!moduloActivo || !!busqueda;
+    world.classList.toggle("focus", hayFoco);
+    TABLAS.forEach((t) => {
+      const n = nodos[t.key];
+      n.classList.toggle("on", t.key === seleccion);
+      n.classList.toggle("rel", seleccion ? activos.has(t.key) && t.key !== seleccion : delModulo.has(t.key));
+      n.classList.toggle("match", coincidencias.has(t.key));
+      n.querySelectorAll("li").forEach((li) => {
+        const col = li.dataset.col;
+        li.classList.toggle("hi", !!seleccion && rels.some((r) => (r.desde === t.key && r.col === col) || (r.hacia === t.key && col === "id")));
+      });
+    });
+    dibujar(front, rels, "F", 2.2, 1);
+    // Las líneas de fondo se apagan mientras hay algo resaltado, para que se lean las del frente.
+    back.style.opacity = hayFoco ? ".35" : "1";
+
+    // Vista de tablas: el filtro por módulo y la búsqueda también aplican.
+    document.querySelectorAll(".lcard").forEach((lc) => {
+      const k = lc.dataset.key;
+      const visible = (!moduloActivo || tablaDe[k].mod === moduloActivo) && (!busqueda || coincidencias.has(k));
+      lc.hidden = !visible;
+    });
+    document.querySelectorAll(".group").forEach((g) => { g.hidden = ![...g.querySelectorAll(".lcard")].some((lc) => !lc.hidden); });
+  }
+
+  function seleccionar(key, centrar = false, acercar = false) {
+    seleccion = key;
+    aplicarResaltado();
+    if (!key) { panel.classList.remove("open"); return; }
+    abrirPanel(key);
+    if (centrar) centrarEn(key, acercar);
+  }
+
+  function abrirPanel(key) {
+    const t = tablaDe[key], m = modDe[t.mod];
+    panel.style.setProperty("--c", colorMod(t.mod));
+    const rels = relacionesDe(key);
+    const salientes = rels.filter((r) => r.desde === key);
+    const entrantes = rels.filter((r) => r.hacia === key && r.desde !== key);
+    const filaRel = (r, haciaKey, texto) => `<li><button type="button" data-ir="${haciaKey}" style="--c:${colorMod(tablaDe[haciaKey].mod)}"><span class="dot"></span><span>${texto}</span><span class="card">${card(r)}</span></button></li>`;
+    panel.innerHTML = `
+      <div class="panel-head">
+        <div style="flex:1;min-width:0">
+          <div class="mod">${esc(m.nombre)}</div>
+          <h2>${esc(t.key)}</h2>
+          <p>${esc(t.desc)}</p>
+        </div>
+        <button class="icon-btn" type="button" id="cerrarPanel" aria-label="Cerrar detalle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="panel-body">
+        <h3>Columnas</h3>
+        <table class="cols"><tbody>${t.cols.map((col) => `
+          <tr><td>${esc(col.n)}<span class="vals">${col.vals ? esc(col.vals) : col.nota ? esc(col.nota) : ""}${col.def ? `${col.vals || col.nota ? " · " : ""}por defecto ${esc(col.def)}` : ""}</span></td>
+          <td><span class="ty">${esc(col.t)}</span><br>${col.pk ? '<span class="tag pk">PK</span>' : ""}${col.fk ? `<span class="tag fk">FK</span>` : ""}${col.uq ? '<span class="tag uq">UNIQUE</span>' : ""}${col.nul ? '<span class="tag nul">NULL</span>' : ""}</td></tr>`).join("")}
+        </tbody></table>
+        ${salientes.length ? `<h3>Apunta a</h3><ul class="rels">${salientes.map((r) => filaRel(r, r.hacia, `<code class="mono">${esc(r.col)}</code> → ${esc(r.hacia)}`)).join("")}</ul>` : ""}
+        ${entrantes.length ? `<h3>La referencian</h3><ul class="rels">${entrantes.map((r) => filaRel(r, r.desde, `${esc(r.desde)}.<code class="mono">${esc(r.col)}</code>`)).join("")}</ul>` : ""}
+        ${t.notas?.length ? `<h3>Notas</h3><ul class="notes">${t.notas.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+      </div>`;
+    panel.classList.add("open");
+    $("#cerrarPanel").addEventListener("click", () => seleccionar(null));
+    panel.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click", () => seleccionar(b.dataset.ir, true, true)));
+  }
+
+  world.addEventListener("click", (e) => {
+    if (seMovio) return;
+    const n = e.target.closest(".t");
+    if (n) seleccionar(seleccion === n.dataset.key ? null : n.dataset.key, true);
+  });
+  world.addEventListener("keydown", (e) => {
+    const n = e.target.closest(".t");
+    if (n && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); seleccionar(n.dataset.key, true, true); }
+  });
+  canvas.addEventListener("click", (e) => {
+    if (!seMovio && !e.target.closest(".t, .panel, .zoom, .legend") && seleccion) seleccionar(null);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && seleccion) seleccionar(null); });
+
+  // Al pasar el mouse, se ven sus relaciones aunque no esté elegida.
+  world.addEventListener("pointerover", (e) => {
+    const n = e.target.closest(".t");
+    if (!n || seleccion || e.pointerType !== "mouse") return;
+    dibujar(front, relacionesDe(n.dataset.key), "F", 2, 0.9);
+  });
+  world.addEventListener("pointerout", (e) => {
+    const n = e.target.closest(".t");
+    if (n && !seleccion && !n.contains(e.relatedTarget)) aplicarResaltado();
+  });
+
+  // ───────────────────────── Búsqueda ─────────────────────────
+  $("#search").addEventListener("input", (e) => { busqueda = e.target.value.trim().toLowerCase(); aplicarResaltado(); });
+  $("#search").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const primera = TABLAS.find((t) => busqueda && (t.key.includes(busqueda) || t.cols.some((col) => col.n.toLowerCase().includes(busqueda))));
+    if (!primera) return;
+    if (vista === "diagrama") seleccionar(primera.key, true, true);
+    else irALista(primera.key);
+  });
+
+  // ───────────────────────── Vista de tablas ─────────────────────────
+  const list = $("#list");
+  MODULOS.forEach((m) => {
+    const tablas = TABLAS.filter((t) => t.mod === m.key);
+    const g = el("section", { className: "group", id: `grupo-${m.key}` });
+    g.style.setProperty("--c", colorMod(m.key));
+    g.innerHTML = `<div class="group-head"><span class="bar-c"></span><div><h2>${esc(m.nombre)}</h2><p>${esc(m.desc)}</p></div></div>
+      <div class="grid">${tablas.map((t) => `
+        <article class="lcard" id="lista-${t.key}" data-key="${t.key}">
+          <h3>${esc(t.key)}</h3><p>${esc(t.desc)}</p>
+          <table class="cols"><tbody>${t.cols.map((col) => `
+            <tr><td>${esc(col.n)}${col.vals ? `<span class="vals">${esc(col.vals)}</span>` : ""}</td>
+            <td><span class="ty">${esc(col.t)}</span> ${col.pk ? '<span class="tag pk">PK</span>' : ""}${col.fk ? `<span class="tag fk" data-ir="${col.fk}" role="link" tabindex="0" title="Ir a ${esc(col.fk)}">→ ${esc(col.fk)}</span>` : ""}${col.uq ? '<span class="tag uq">U</span>' : ""}${col.nul ? '<span class="tag nul">?</span>' : ""}</td></tr>`).join("")}
+          </tbody></table>
+          ${t.notas?.length ? `<ul class="notes">${t.notas.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+        </article>`).join("")}</div>`;
+    list.appendChild(g);
+  });
+  function irALista(key) {
+    const lc = document.getElementById(`lista-${key}`);
+    if (!lc) return;
+    if (lc.hidden) { moduloActivo = null; busqueda = ""; $("#search").value = ""; modulesEl.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", "false")); aplicarResaltado(); }
+    lc.scrollIntoView({ behavior: "smooth", block: "start" });
+    lc.classList.remove("flash"); void lc.offsetWidth; lc.classList.add("flash");
+  }
+  list.addEventListener("click", (e) => { const tag = e.target.closest("[data-ir]"); if (tag) irALista(tag.dataset.ir); });
+  list.addEventListener("keydown", (e) => { const tag = e.target.closest("[data-ir]"); if (tag && e.key === "Enter") irALista(tag.dataset.ir); });
+
+  // ───────────────────────── Reglas ─────────────────────────
+  $("#rules").innerHTML = REGLAS.map((r) => `<div class="rule"><span class="rtag">${r.tag}</span><h3>${r.t}</h3><p>${r.p}</p></div>`).join("");
+
+  // ───────────────────────── Pestañas y tema ─────────────────────────
+  function mostrar(v) {
+    vista = v;
+    document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.view === v)));
+    ["diagrama", "tablas", "reglas"].forEach((k) => ($(`#view-${k}`).hidden = k !== v));
+    $("#modules").hidden = v === "reglas";
+    $(".search").style.visibility = v === "reglas" ? "hidden" : "visible";
+    if (v === "diagrama") requestAnimationFrame(() => { ubicar(); redibujar(); });
+  }
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => mostrar(t.dataset.view)));
+
+  const raiz = document.documentElement;
+  $("#themeBtn").addEventListener("click", () => {
+    const oscuro = raiz.dataset.theme ? raiz.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    raiz.dataset.theme = oscuro ? "light" : "dark";
+  });
+
+  function redibujar() {
+    dibujar(back, RELS, "B", 1.3, 0.85);
+    aplicarResaltado();
+  }
+
+  // ───────────────────────── Arranque ─────────────────────────
+  function iniciar() {
+    ubicar();
+    redibujar();
+    ajustar();
+    world.classList.add("listo");
+    // En pantallas chicas arranca en la lista, que se lee mejor sin zoom.
+    if (window.innerWidth < 720) mostrar("tablas");
+  }
+  let timer;
+  window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(() => { if (vista === "diagrama") { ubicar(); redibujar(); ajustar(); } }, 150); });
+  (document.fonts?.ready ?? Promise.resolve()).then(iniciar);
+})();
+</script>
+</body>
+</html>
