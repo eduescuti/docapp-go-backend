@@ -1,0 +1,585 @@
+// DocApp Go — modelo de datos del Sprint 2 (Prisma + SQLite).
+// Tablas en snake_case plural (@@map); columnas con el mismo nombre que los campos del frontend
+// (src/domain/), así el JSON de la API coincide con los tipos sin traducir.
+// SQLite no tiene ENUM: los estados son String y se restringen con CHECK en la migración
+// (ver "SQL extra de la migración") y con uniones de tipos en TypeScript.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── Identidad y seguridad ─────────────
+
+model Usuario {
+  id            String   @id @default(uuid())
+  /// DNI del login único (regla 11). La cuenta de administración usa "admin".
+  dni           String   @unique
+  /// scrypt: "salt:hash" en hexadecimal. Nunca la contraseña en texto plano.
+  passwordHash  String
+  /// 'paciente' | 'doctor' | 'admin'. Lo determina la cuenta, no se elige al entrar.
+  rol           String
+  nombre        String
+  apellido      String
+  /// Foto de perfil (paciente o profesional): nombre del archivo en uploads/fotos/ ("<uuid>.jpg"), al azar y
+  /// nuevo en cada foto. La API la sirve en /api/fotos/<fotoArchivo>. Null = sin foto (se ven las iniciales).
+  fotoArchivo   String?  @unique
+  /// Verificación de identidad del registro (28/10/2026): se escaneó el código PDF417 del DNI y coincidió con el
+  /// DNI y el nombre de la cuenta. No se guarda la imagen ni el contenido del código: solo cuándo se verificó y un
+  /// HMAC-SHA256 del número de trámite (con SECRETO_IDENTIDAD), para que un mismo DNI físico no abra dos cuentas.
+  /// Null en las cuentas del seed y en la de admin.
+  identidadVerificadaEl DateTime?
+  tramiteHash   String?  @unique
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  paciente       Paciente?
+  medico         Medico?
+  sesiones       Sesion[]
+  notificaciones Notificacion[]
+  auditoria      RegistroAuditoria[]
+
+  @@map("usuarios")
+}
+
+/// Token de sesión opaco. Se guarda solo su hash SHA-256: si se filtra la base, los tokens no sirven.
+model Sesion {
+  id          String    @id @default(uuid())
+  usuarioId   String
+  tokenHash   String    @unique
+  creadaEn    DateTime  @default(now())
+  expiraEn    DateTime
+  ultimoUsoEn DateTime  @default(now())
+  /// Logout o cierre forzado. Una sesión revocada no vuelve a valer aunque no haya vencido.
+  revocadaEn  DateTime?
+  dispositivo String?
+  ip          String?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("sesiones")
+}
+
+/// Registro de acciones importantes (§11): logins, cancelaciones, descargas de resultados, altas del admin.
+model RegistroAuditoria {
+  id        String   @id @default(uuid())
+  usuarioId String?
+  accion    String
+  entidad   String?
+  entidadId String?
+  detalle   String?
+  ip        String?
+  creadoEn  DateTime @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioId, creadoEn])
+  @@map("registro_auditoria")
+}
+
+/// Clave con la que un tercero (el laboratorio de una institución) carga PDF de resultados.
+model ClaveIntegracion {
+  id            String    @id @default(uuid())
+  institucionId String
+  nombre        String
+  claveHash     String    @unique
+  activa        Boolean   @default(true)
+  creadaEn      DateTime  @default(now())
+  ultimoUsoEn   DateTime?
+
+  institucion Institucion @relation(fields: [institucionId], references: [id])
+  resultados  Resultado[]
+
+  @@map("claves_integracion")
+}
+
+// ───────────── Cobertura ─────────────
+
+/// Obra social o prepaga ("OSDE"). La carga el admin.
+model ObraSocial {
+  id            String  @id @default(uuid())
+  nombre        String  @unique
+  /// Nombre largo o aclaración ("Obra Social del Poder Judicial de la Nación"). Se muestra en los selectores.
+  descripcion   String?
+  /// 'RNAS' (obras sociales) | 'RNEMP' (prepagas) | 'otro'
+  registro      String?
+  codigoOficial String?
+  activa        Boolean @default(true)
+
+  planes        PlanMedico[]
+  instituciones InstitucionCobertura[]
+  medicos       MedicoCobertura[]
+
+  @@map("obras_sociales")
+}
+
+/// Plan de una obra social ("OSDE 210"). Es el filtro transversal de la app (§5).
+model PlanMedico {
+  id           String  @id @default(uuid())
+  obraSocialId String
+  nombre       String
+  activo       Boolean @default(true)
+
+  obraSocial    ObraSocial        @relation(fields: [obraSocialId], references: [id])
+  pacientes     Paciente[]
+  instituciones InstitucionCobertura[]
+  medicos       MedicoCobertura[]
+
+  @@unique([obraSocialId, nombre])
+  @@map("planes_medicos")
+}
+
+/// Qué coberturas acepta una institución privada o de seguridad social (reglas 1 y 15). Las públicas no
+/// necesitan filas. planMedicoId null = todos los planes de esa obra social. Ver 08-coberturas.md.
+model InstitucionCobertura {
+  id            String  @id @default(uuid())
+  institucionId String
+  obraSocialId  String
+  planMedicoId  String?
+  /// 'web_institucion' | 'cartilla_cobertura' | 'relevamiento_propio'
+  fuente        String
+  /// Página consultada. Null solo con 'relevamiento_propio'.
+  fuenteUrl     String?
+  /// "yyyy-MM-dd" en que se verificó.
+  verificadoEl  String
+
+  institucion Institucion @relation(fields: [institucionId], references: [id], onDelete: Cascade)
+  obraSocial  ObraSocial  @relation(fields: [obraSocialId], references: [id], onDelete: Cascade)
+  plan        PlanMedico? @relation(fields: [planMedicoId], references: [id], onDelete: Cascade)
+
+  @@unique([institucionId, obraSocialId, planMedicoId])
+  @@index([obraSocialId])
+  @@map("instituciones_coberturas")
+}
+
+// ───────────── Instituciones y geografía ─────────────
+
+/// Hospital, clínica, centro médico o laboratorio.
+model Institucion {
+  id       String   @id @default(uuid())
+  nombre   String
+  /// 'hospital' | 'clinica' | 'centro_medico' | 'laboratorio'
+  tipo     String
+  /// 'publico' | 'privado' | 'seguridad_social' (REFES). Decide la regla 15.
+  origen   String
+  logoUrl  String?
+  sitioWeb String?
+  activa   Boolean  @default(true)
+  creadaEn DateTime @default(now())
+
+  sedes             Sede[]
+  coberturas        InstitucionCobertura[]
+  favoritaDe        PacienteInstitucionFavorita[]
+  ordenes           Orden[]
+  resultados        Resultado[]
+  clavesIntegracion ClaveIntegracion[]
+
+  @@index([origen])
+  @@map("instituciones")
+}
+
+/// Ubicación física: nombre + dirección + latitud + longitud. Hoy, una por institución (REFES).
+model Sede {
+  id            String  @id @default(uuid())
+  institucionId String
+  nombre        String
+  direccion     String
+  ciudad        String
+  latitud       Float
+  longitud      Float
+  telefono      String?
+  /// establecimiento_id del REFES (14 dígitos). No lo tienen las altas del admin.
+  refesId       String? @unique
+
+  institucion Institucion      @relation(fields: [institucionId], references: [id], onDelete: Cascade)
+  medicos     MedicoSede[]
+  franjas     FranjaAtencion[]
+  turnos      Turno[]
+
+  @@index([institucionId])
+  @@map("sedes")
+}
+
+// ───────────── Pacientes ─────────────
+
+model Paciente {
+  id             String  @id @default(uuid())
+  usuarioId      String  @unique
+  planMedicoId   String
+  /// Reservados (§5): existen pero hoy no se piden ni se muestran.
+  numeroAfiliado String?
+  email          String?
+  telefono       String?
+
+  usuario                Usuario                       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  plan                   PlanMedico                    @relation(fields: [planMedicoId], references: [id])
+  medicosFavoritos       PacienteMedicoFavorito[]
+  institucionesFavoritas PacienteInstitucionFavorita[]
+  notas                  NotaPaciente[]
+  turnos                 Turno[]
+  ordenes                Orden[]
+  recetas                Receta[]
+
+  @@index([planMedicoId])
+  @@map("pacientes")
+}
+
+model PacienteMedicoFavorito {
+  pacienteId String
+  medicoId   String
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+  medico   Medico   @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+
+  @@id([pacienteId, medicoId])
+  @@map("pacientes_medicos_favoritos")
+}
+
+model PacienteInstitucionFavorita {
+  pacienteId    String
+  institucionId String
+
+  paciente    Paciente    @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+  institucion Institucion @relation(fields: [institucionId], references: [id], onDelete: Cascade)
+
+  @@id([pacienteId, institucionId])
+  @@map("pacientes_instituciones_favoritas")
+}
+
+// ───────────── Profesionales ─────────────
+
+/// Copia del padrón nacional de profesionales. El registro valida la terna DNI + matrícula + profesión acá.
+model ProfesionalPadron {
+  id                String  @id @default(uuid())
+  codigoProfesional String  @unique
+  dni               String
+  nombre            String
+  apellido          String
+  profesion         String
+  /// SQLite no tiene listas: JSON con los nombres, p. ej. ["Cardiología"].
+  especializaciones String  @default("[]")
+  emisor            String
+  provincia         String
+  matricula         String
+  estadoMatricula   String
+  activo            Boolean
+
+  medico Medico?
+
+  @@unique([dni, matricula, profesion])
+  @@map("profesionales_padron")
+}
+
+/// Perfil profesional: los datos del registro + lugares de atención. Sin horarios de atención (Sprint 2).
+model Medico {
+  id                String  @id @default(uuid())
+  usuarioId         String  @unique
+  padronId          String? @unique
+  matricula         String
+  /// "Médico", "Enfermero", ... (sale del padrón).
+  profesion         String
+  /// 'femenino' | 'masculino' — define "Dra." / "Dr.".
+  genero            String
+  especialidadId    String
+  subespecialidadId String?
+  descripcion       String  @default("")
+  aniosExperiencia  Int?
+
+  usuario         Usuario                 @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  padron          ProfesionalPadron?       @relation(fields: [padronId], references: [id])
+  especialidad    Especialidad             @relation(fields: [especialidadId], references: [id])
+  subespecialidad Subespecialidad?         @relation(fields: [subespecialidadId], references: [id])
+  lugares         MedicoSede[]
+  coberturas      MedicoCobertura[]
+  franjas         FranjaAtencion[]
+  favoritoDe      PacienteMedicoFavorito[]
+  notas           NotaPaciente[]
+  turnos          Turno[]
+  ordenes         Orden[]
+  recetas         Receta[]
+
+  @@unique([matricula, profesion])
+  @@index([especialidadId])
+  @@map("medicos")
+}
+
+model Especialidad {
+  id     String @id @default(uuid())
+  nombre String @unique
+  /// Profesión del padrón a la que pertenece ("Médico", "Enfermero", "Kinesiólogo"): el registro solo ofrece las
+  /// de la profesión del profesional. Médicas: Res. 1814/2015; enfermería: Res. 199/2011 (Ministerio de Salud).
+  profesion String @default("Médico")
+
+  subespecialidades Subespecialidad[]
+  medicos           Medico[]
+  turnos            Turno[]
+
+  @@map("especialidades")
+}
+
+model Subespecialidad {
+  id             String @id @default(uuid())
+  especialidadId String
+  nombre         String
+
+  especialidad Especialidad @relation(fields: [especialidadId], references: [id], onDelete: Cascade)
+  medicos      Medico[]
+
+  @@unique([especialidadId, nombre])
+  @@map("subespecialidades")
+}
+
+/// Lugares de atención: en qué sedes (hospitales) atiende cada profesional.
+model MedicoSede {
+  medicoId String
+  sedeId   String
+
+  medico Medico @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  sede   Sede   @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+
+  @@id([medicoId, sedeId])
+  @@index([sedeId])
+  @@map("medicos_sedes")
+}
+
+/// Franjas de atención: qué días y de qué hora a qué hora atiende el profesional en cada lugar. Las carga él
+/// en su Agenda (no se muestran en el perfil). Se ofrecen turnos de 30 min dentro de cada franja.
+model FranjaAtencion {
+  id         String @id @default(uuid())
+  medicoId   String
+  sedeId     String
+  /// 0 = domingo … 6 = sábado
+  diaSemana  Int
+  /// "HH:mm", múltiplo de 30 min
+  desde      String
+  /// "HH:mm", mayor que desde
+  hasta      String
+
+  medico Medico @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  sede   Sede   @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+
+  @@index([medicoId, diaSemana])
+  @@index([sedeId])
+  @@map("franjas_atencion")
+}
+
+/// Coberturas que atiende cada profesional (regla 1). Las elige él en su Perfil. Misma lógica de plan opcional.
+model MedicoCobertura {
+  id           String  @id @default(uuid())
+  medicoId     String
+  obraSocialId String
+  planMedicoId String?
+
+  medico     Medico      @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  obraSocial ObraSocial  @relation(fields: [obraSocialId], references: [id], onDelete: Cascade)
+  plan       PlanMedico? @relation(fields: [planMedicoId], references: [id], onDelete: Cascade)
+
+  @@unique([medicoId, obraSocialId, planMedicoId])
+  @@index([obraSocialId])
+  @@map("medicos_coberturas")
+}
+
+/// Nota privada de un profesional sobre un paciente: solo la ve quien la escribió.
+model NotaPaciente {
+  id         String   @id @default(uuid())
+  medicoId   String
+  pacienteId String
+  texto      String
+  creadaEn   DateTime @default(now())
+
+  medico   Medico   @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  paciente Paciente @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+
+  @@index([medicoId, pacienteId])
+  @@map("notas_paciente")
+}
+
+// ───────────── Turnos ─────────────
+
+/// Fecha + hora + hospital (sede) + especialidad + médico: única entre los turnos activos (índice parcial).
+/// Además, un médico no tiene dos turnos activos a la misma fecha y hora (turnos_medico_activo).
+model Turno {
+  id                String    @id @default(uuid())
+  pacienteId        String
+  medicoId          String
+  sedeId            String
+  /// La del médico al reservar. Se guarda porque es parte de la combinación única de las notas.
+  especialidadId    String
+  /// "yyyy-MM-dd"
+  fecha             String
+  /// "HH:mm"
+  hora              String
+  /// 'pendiente' | 'confirmado' | 'rechazado' | 'cancelado' | 'completado'
+  estado            String    @default("pendiente")
+  /// El paciente lo sacó de su historial. Solo se oculta en esa lista.
+  ocultoEnHistorial Boolean   @default(false)
+  creadoEn          DateTime  @default(now())
+  actualizadoEn     DateTime  @updatedAt
+  /// Cuándo el médico lo confirmó o rechazó.
+  respondidoEn      DateTime?
+  canceladoEn       DateTime?
+  /// Al reprogramar: el turno (cancelado) que este reemplaza.
+  reprogramadoDesdeId String? @unique
+
+  paciente          Paciente     @relation(fields: [pacienteId], references: [id])
+  medico            Medico       @relation(fields: [medicoId], references: [id])
+  sede              Sede         @relation(fields: [sedeId], references: [id])
+  especialidad      Especialidad @relation(fields: [especialidadId], references: [id])
+  feedback          Feedback?
+  reprogramadoDesde Turno?       @relation("Reprogramacion", fields: [reprogramadoDesdeId], references: [id])
+  reprogramadoEn    Turno?       @relation("Reprogramacion")
+
+  @@index([pacienteId, fecha])
+  @@index([medicoId, fecha])
+  @@index([estado, fecha])
+  @@map("turnos")
+}
+
+// ───────────── Estudios: órdenes y resultados ─────────────
+
+/// Orden que el médico le asigna al paciente, con indicaciones. Hospital + fecha + médico.
+model Orden {
+  id            String   @id @default(uuid())
+  medicoId      String
+  pacienteId    String
+  /// Dónde hacer los estudios.
+  institucionId String
+  /// Fecha de emisión "yyyy-MM-dd".
+  fecha         String
+  indicaciones  String
+  /// 'pendiente' | 'listo' (pasa a listo con el primer resultado)
+  estado        String   @default("pendiente")
+  /// "yyyy-MM-dd" en que el paciente la archivó; null = no archivada.
+  archivadoEl   String?
+  creadaEn      DateTime @default(now())
+
+  medico      Medico         @relation(fields: [medicoId], references: [id])
+  paciente    Paciente       @relation(fields: [pacienteId], references: [id])
+  institucion Institucion    @relation(fields: [institucionId], references: [id])
+  estudios    OrdenEstudio[]
+  resultados  Resultado[]
+
+  @@index([pacienteId, archivadoEl])
+  @@index([medicoId, pacienteId])
+  @@map("ordenes")
+}
+
+/// Cada estudio pedido en una orden ("Hemograma completo").
+model OrdenEstudio {
+  id       String @id @default(uuid())
+  ordenId  String
+  nombre   String
+  posicion Int
+
+  orden Orden @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+
+  @@unique([ordenId, posicion])
+  @@map("orden_estudios")
+}
+
+/// Resultado: médico (el de la orden) + fecha + hospital + orden + archivo PDF. Sin estado.
+model Resultado {
+  id                 String   @id @default(uuid())
+  ordenId            String
+  /// Dónde se hizo (puede no ser el sugerido en la orden).
+  institucionId      String
+  /// Nombre del estudio ("Análisis de sangre completo").
+  tipo               String
+  /// Fecha del estudio "yyyy-MM-dd".
+  fecha              String
+  /// Ruta dentro de uploads/. Nunca se sirve como archivo estático: solo por GET autorizado.
+  archivoRuta        String   @unique
+  archivoBytes       Int
+  archivoSha256      String
+  /// Quién lo cargó (el tercero). Null si se cargó con el seed.
+  claveIntegracionId String?
+  /// "yyyy-MM-dd" en que el paciente lo archivó; null = no archivado.
+  archivadoEl        String?
+  cargadoEn          DateTime @default(now())
+
+  orden            Orden             @relation(fields: [ordenId], references: [id])
+  institucion      Institucion       @relation(fields: [institucionId], references: [id])
+  claveIntegracion ClaveIntegracion? @relation(fields: [claveIntegracionId], references: [id])
+
+  @@index([ordenId])
+  @@map("resultados")
+}
+
+// ───────────── Recetas ─────────────
+
+/// Nombre (medicacion) + dosis + cómo tomarla (frecuencia) + duración + indicación + médico + fecha de emisión.
+model Receta {
+  id            String   @id @default(uuid())
+  medicoId      String
+  pacienteId    String
+  /// Fecha de emisión "yyyy-MM-dd".
+  fecha         String
+  medicacion    String
+  dosis         String
+  frecuencia    String
+  duracionDias  Int
+  /// fecha + duracionDias. Activa mientras vigenteHasta >= hoy; después, pasada. El estado no se guarda.
+  vigenteHasta  String
+  indicaciones  String?
+  observaciones String?
+  /// "yyyy-MM-dd" en que el paciente la archivó (solo pasadas); null = no archivada.
+  archivadoEl   String?
+  creadaEn      DateTime @default(now())
+
+  medico   Medico   @relation(fields: [medicoId], references: [id])
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+
+  @@index([pacienteId, vigenteHasta])
+  @@index([medicoId, pacienteId])
+  @@map("recetas")
+}
+
+// ───────────── Feedback y notificaciones ─────────────
+
+/// Un feedback por turno completado (regla 6). El médico sale del turno.
+model Feedback {
+  id                  String   @id @default(uuid())
+  turnoId             String   @unique
+  /// "¿Cómo fue tu consulta?": la única calificación obligatoria (28/10/2026). Es la que da la valoración.
+  estrellas           Int
+  /// Criterios opcionales: null = el paciente no lo calificó.
+  puntualidad         Int?
+  atencion            Int?
+  trato               Int?
+  claridadExplicacion Int?
+  experienciaGeneral  Int?
+  comentario          String?
+  /// Moderación del admin: oculto no cuenta en la valoración ni se muestra.
+  oculto              Boolean  @default(false)
+  creadoEn            DateTime @default(now())
+
+  turno Turno @relation(fields: [turnoId], references: [id])
+
+  @@map("feedbacks")
+}
+
+model Notificacion {
+  id             String   @id @default(uuid())
+  usuarioId      String
+  /// 'recordatorio_turno' | 'turno_confirmado' | 'turno_rechazado' | 'turno_cancelado' |
+  /// 'resultado_disponible' | 'nueva_receta' | 'nueva_orden'
+  tipo           String
+  titulo         String
+  mensaje        String
+  leida          Boolean  @default(false)
+  /// A qué apunta: 'turno' | 'orden' | 'resultado' | 'receta' + su id.
+  referenciaTipo String?
+  referenciaId   String?
+  creadaEn       DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, leida])
+  @@map("notificaciones")
+}

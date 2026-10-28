@@ -54,10 +54,11 @@ App                                  Servidor                                   
 ### Cada pedido
 
 ```ts
-// src/auth/middleware.ts (idea)
-export async function autenticar(req: IncomingMessage): Promise<UsuarioSesion> {
-  const header = req.headers.authorization ?? "";
-  const [tipo, token] = header.split(" ");
+// src/middlewares/autenticar.ts (idea)
+import type { NextFunction, Request, Response } from "express";
+
+export async function autenticar(req: Request, _res: Response, next: NextFunction) {
+  const [tipo, token] = (req.headers.authorization ?? "").split(" ");
   if (tipo !== "Bearer" || !token) throw new ErrorHttp(401, "Iniciá sesión.");
 
   const sesion = await prisma.sesion.findUnique({
@@ -68,16 +69,20 @@ export async function autenticar(req: IncomingMessage): Promise<UsuarioSesion> {
   if (!sesion || sesion.revocadaEn || sesion.expiraEn <= ahora || !sesion.usuario.activo) {
     throw new ErrorHttp(401, "Tu sesión venció. Iniciá sesión de nuevo.");
   }
-  return sesion.usuario; // queda en el contexto del pedido: ctx.usuario
+  await renovarSiCorresponde(sesion, ahora); // vencimiento por inactividad (abajo)
+  req.usuario = sesion.usuario;              // tipado con declaration merging de Express
+  next();
 }
 
-export function requerirRol(usuario: UsuarioSesion, ...roles: Rol[]) {
-  if (!roles.includes(usuario.rol as Rol)) throw new ErrorHttp(403, "No tenés permiso para esto.");
-}
+export const requerirRol = (...roles: Rol[]) => (req: Request, _res: Response, next: NextFunction) => {
+  if (!roles.includes(req.usuario.rol as Rol)) throw new ErrorHttp(403, "No tenés permiso para esto.");
+  next();
+};
 ```
 
-El router llama a `autenticar` antes de cualquier handler que no sea público, y cada handler llama a
-`requerirRol` con los roles que acepta. Después, el **servicio** verifica que el dato sea del usuario
+Cada router no público usa `autenticar` (por ejemplo `rutasTurnos.use(autenticar)`) y cada ruta declara
+los roles que acepta con `requerirRol("paciente")`. Express 5 manda al manejador de errores lo que tire
+un middleware `async`. Después, el **servicio** verifica que el dato sea del usuario
 (el turno es suyo, el paciente tiene un turno con este médico): si no lo es, responde `404` y no `403`,
 para no confirmar que ese id existe.
 
@@ -86,13 +91,30 @@ para no confirmar que ese id existe.
 | Evento | Qué pasa |
 |---|---|
 | Logout (`POST /api/auth/logout`) | `revocadaEn = ahora` para ese token. `204`. |
-| Pasan `DURACION_SESION_HORAS` (30 días por defecto) | El token deja de valer (`401`) y la app vuelve al login. |
+| Pasan **90 días sin usar la app** (`DIAS_SESION_INACTIVA`) | El token deja de valer (`401`) y la app vuelve al login. Mientras se use, no vence nunca (ver abajo). |
 | Cambio de contraseña | Se revocan **todas** las otras sesiones del usuario. |
 | Usuario desactivado por el admin | `activo = false`: sus tokens dejan de valer en el próximo pedido. |
 | Limpieza | Al iniciar el servidor (o una vez por día), borrar sesiones vencidas o revocadas hace más de 30 días. |
 
-`ultimoUsoEn` se actualiza como mucho una vez por minuto por sesión (no en cada pedido) para no escribir
-en la base todo el tiempo.
+### Sesión iniciada hasta que el usuario la cierre (decidido el 27/10/2026)
+
+Como en cualquier app del celular, la sesión queda iniciada: el usuario decide cuándo cerrarla. Para que
+un teléfono perdido o abandonado no quede con una sesión abierta para siempre, el vencimiento es **por
+inactividad**: `expiraEn = último uso + 90 días`. Cada pedido válido corre el vencimiento
+(`renovarSiCorresponde`); quien abre la app aunque sea una vez cada tres meses no tiene que volver a
+ingresar nunca.
+
+`ultimoUsoEn` y `expiraEn` se actualizan como mucho una vez por minuto por sesión (no en cada pedido) para
+no escribir en la base todo el tiempo.
+
+Lo que protege una sesión larga:
+
+- El token es aleatorio (32 bytes) y en la base está solo su hash.
+- Se corta al instante: cerrar sesión, cambiar la contraseña (corta todas las otras) o que el admin
+  desactive la cuenta.
+- En el teléfono queda cifrado (`expo-secure-store`) y, si está activada la huella, la app la pide al
+  abrirse antes de usar el token.
+- En producción viaja siempre por HTTPS.
 
 ## Contraseñas
 
@@ -130,10 +152,11 @@ login exitoso se guarda en `registro_auditoria`.
 
 ## En la app (frontend)
 
-- **Dónde guardar el token:** en el almacenamiento seguro del teléfono (`expo-secure-store`, cifrado por el
-  sistema operativo), no en `AsyncStorage` (texto plano). `expo-secure-store` no está instalado: hay que
-  sumarlo con `npx expo install expo-secure-store`, y por la regla de versiones congeladas eso se confirma
-  antes de hacerlo. En web no existe: ahí el token vive solo en memoria y se pide login al recargar.
+- **Dónde guarda el teléfono su copia del token:** en `expo-secure-store` (cifrado por el sistema
+  operativo: Keychain en iOS, Keystore en Android), no en `AsyncStorage` (texto plano). Decidido el
+  27/10/2026: se instala con `npx expo install expo-secure-store`, que elige la versión del SDK 57 sin
+  tocar RN ni Expo. La sesión en sí vive en nuestra base (`sesiones`); el teléfono solo guarda la llave.
+  En web no existe: ahí el token vive solo en memoria y se pide login al recargar.
 - **Un solo lugar que hace los `fetch`:** `src/services/apiClient.ts` agrega `Authorization: Bearer` a
   cada pedido y, si la respuesta es `401`, borra la sesión y manda al login.
 - **Hoy `src/services/biometria.ts` guarda el DNI y la contraseña en `AsyncStorage`** para el ingreso con

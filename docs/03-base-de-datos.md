@@ -7,6 +7,15 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 > El `schema.prisma` y el SQL de esta página se validaron el 25/10/2026: `prisma validate` lo da por
 > válido, `prisma migrate diff` genera las 26 tablas y el SQL extra se probó en SQLite (bloquea la doble
 > reserva, un turno cancelado libera el horario y se rechazan los estados inválidos).
+>
+> **27/10/2026:** `instituciones_planes` y `medicos_planes` se reemplazaron por `instituciones_coberturas` y
+> `medicos_coberturas` ([08-coberturas.md](08-coberturas.md)); se sumaron `franjas_atencion`,
+> `turnos.reprogramadoDesdeId` y el índice `turnos_medico_activo` ([07-pendientes.md](07-pendientes.md)).
+> Validado de nuevo el 27/10/2026 al crear `backend/`: `prisma validate` lo da por válido, la migración
+> `inicial` crea las 27 tablas con el SQL extra y una prueba sobre la base confirmó cada regla (doble
+> reserva, médico en dos sedes a la misma hora, coberturas con plan de otra obra social, franjas y estados
+> inválidos). La segunda migración (`franjas_media_hora`) suma al trigger de franjas que las horas sean en
+> punto o y media.
 
 ## Convenciones
 
@@ -24,15 +33,15 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 
 ## Módulos y tablas
 
-26 tablas en 8 módulos.
+27 tablas en 8 módulos.
 
 | Módulo | Tablas | Para qué |
 |---|---|---|
 | Identidad y seguridad | `usuarios`, `sesiones`, `registro_auditoria`, `claves_integracion` | Login único por DNI, tokens de sesión, trazabilidad y la clave del tercero que carga PDF. |
-| Cobertura | `obras_sociales`, `planes_medicos`, `instituciones_planes` | Obras sociales y planes (los carga el admin) y qué planes acepta cada institución privada. |
+| Cobertura | `obras_sociales`, `planes_medicos`, `instituciones_coberturas` | Obras sociales y planes (los carga el admin) y qué coberturas acepta cada institución privada. Ver [08-coberturas.md](08-coberturas.md). |
 | Instituciones | `instituciones`, `sedes` | Hospitales, clínicas, centros y laboratorios: nombre + dirección + latitud + longitud. |
 | Pacientes | `pacientes`, `pacientes_medicos_favoritos`, `pacientes_instituciones_favoritas` | Datos del paciente, su plan y sus favoritos. |
-| Profesionales | `profesionales_padron`, `medicos`, `especialidades`, `subespecialidades`, `medicos_sedes`, `medicos_planes`, `notas_paciente` | Padrón para validar el registro, perfil, lugares de atención y notas privadas. |
+| Profesionales | `profesionales_padron`, `medicos`, `especialidades`, `subespecialidades`, `medicos_sedes`, `franjas_atencion`, `medicos_coberturas`, `notas_paciente` | Padrón para validar el registro, perfil, lugares de atención, franjas de atención, coberturas que atiende y notas privadas. |
 | Turnos | `turnos` | El núcleo: estado, unicidad, historial. |
 | Estudios | `ordenes`, `orden_estudios`, `resultados` | Órdenes con indicaciones, los estudios pedidos y los resultados con su PDF. |
 | Recetas, feedback y avisos | `recetas`, `feedbacks`, `notificaciones` | Recetas, calificación de turnos cumplidos y notificaciones. |
@@ -45,10 +54,12 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 | Usuario → Sesión | 1 : N | Un usuario puede tener varias sesiones (celular y web). |
 | Obra social → Plan | 1 : N | "OSDE" → "OSDE 210", "OSDE 310". |
 | Plan → Paciente | 1 : N | Cada paciente tiene un plan (filtro transversal de la app). |
-| Institución ↔ Plan | N : M | `instituciones_planes`. Solo para privadas: las públicas se ven siempre (regla 15). |
+| Institución ↔ Obra social (↔ Plan) | N : M | `instituciones_coberturas`: obra social con plan opcional (sin plan = todos sus planes). Solo para privadas y de seguridad social: las públicas se ven siempre (regla 15). |
 | Institución → Sede | 1 : N | Hoy, una sede por institución (las del REFES). |
 | Médico ↔ Sede | N : M | `medicos_sedes` = **lugares de atención** del perfil. |
-| Médico ↔ Plan | N : M | `medicos_planes`. |
+| Médico + Sede → Franja | 1 : N | `franjas_atencion`: qué días y de qué hora a qué hora atiende en cada lugar. |
+| Turno → Turno | 0..1 : 0..1 | `turnos.reprogramadoDesdeId`: el turno nuevo apunta al que reemplazó al reprogramar. |
+| Médico ↔ Obra social (↔ Plan) | N : M | `medicos_coberturas`, misma lógica. Las elige el profesional en su Perfil. |
 | Especialidad → Médico | 1 : N | Cada médico tiene una especialidad (y opcionalmente una subespecialidad). |
 | Paciente / Médico / Sede / Especialidad → Turno | 1 : N | Un turno es de un paciente, con un médico, en una sede, de una especialidad. |
 | Turno → Feedback | 1 : 0..1 | `feedbacks.turnoId` `UNIQUE`: un feedback por turno. |
@@ -69,11 +80,17 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 | **Resultados sin estado** | `resultados` no tiene columna de estado. El "Nuevo" del frontend no se guarda en la base. |
 | **Todo se archiva** | `archivadoEl` (fecha, null = no archivado) en `ordenes`, `resultados` y `recetas`. La carpeta año → mes sale de esa fecha. |
 | **Recetas: activa / pasada** | No se guarda: se calcula con `vigenteHasta >= hoy`. `vigenteHasta` se fija al crearla (`fecha + duracionDias`). |
-| **Perfil del médico sin horarios** | No hay tabla de horarios. Los lugares de atención son `medicos_sedes`. |
-| **Hospitales por obra social** (reglas 1 y 15) | `instituciones.origen = 'publico'` o existe fila en `instituciones_planes` para el plan del paciente. |
+| **Perfil del médico sin horarios** | El perfil no muestra horarios. Los lugares de atención son `medicos_sedes`; la disponibilidad sale de `franjas_atencion`, que el profesional carga en su Agenda (27/10/2026). |
+| **Un médico no está en dos lugares a la vez** | Índice único parcial `turnos_medico_activo` sobre `(medicoId, fecha, hora)` entre activos. Las franjas de un mismo médico no se pisan entre lugares (lo valida el servicio). |
+| **Reprogramar** | No hay estado `reprogramado`: el turno viejo queda `cancelado` y el nuevo nace `pendiente` con `reprogramadoDesdeId`, en una transacción. |
+| **Hospitales por obra social** (reglas 1 y 15) | `instituciones.origen = 'publico'` o existe fila en `instituciones_coberturas` para la obra social del paciente, sin plan o con su plan. |
 | **Feedback solo de turnos cumplidos** (regla 6) | `feedbacks.turnoId` obligatorio y `UNIQUE`; el servicio verifica que el turno esté `completado` y sea del paciente. |
 | **Órdenes y recetas del médico que las emitió** (regla 7) | `medicoId` `NOT NULL` con FK, sin cascada. |
 | **Contraseñas y tokens** (§11) | `usuarios.passwordHash` (scrypt) y `sesiones.tokenHash` (SHA-256). Nunca el valor original. |
+| **Verificación de identidad** (28/10/2026) | `usuarios.identidadVerificadaEl` y `usuarios.tramiteHash` (`UNIQUE`, HMAC-SHA256 del número de trámite del DNI con `SECRETO_IDENTIDAD`, 64 caracteres hexadecimales: trigger). Ni imagen ni contenido del código. Un mismo DNI físico no abre dos cuentas. Detalle: [06](06-reglas-de-negocio.md#verificación-de-identidad-del-registro). |
+| **Especialidad por profesión** (28/10/2026) | `especialidades.profesion`: el registro de un kinesiólogo no ofrece "Cardiología". 70 médicas (Res. 1814/2015), 7 de enfermería (Res. 199/2011) y "Kinesiología y Fisioterapia" (no hay listado nacional de especialidades de kinesiología). |
+| **Feedback con criterios opcionales** (28/10/2026) | `feedbacks.estrellas` obligatoria; los 5 criterios, `NULL` si no se calificaron. El trigger de 1 a 5 deja pasar los `NULL`. |
+| **Fotos de perfil** (27/10/2026) | `usuarios.fotoArchivo` (`UNIQUE`, null = sin foto): solo el nombre del archivo, al azar (`<uuid>.jpg`) y nuevo en cada foto. La imagen está en `backend/uploads/fotos/`, no en la base. Va en `usuarios` porque la tienen pacientes y profesionales. Quién la ve: [06](06-reglas-de-negocio.md#fotos-de-perfil). |
 
 ## Consultas clave
 
@@ -86,8 +103,9 @@ FROM instituciones i
 JOIN sedes s ON s.institucionId = i.id
 WHERE i.activa = 1
   AND (i.origen = 'publico'
-       OR EXISTS (SELECT 1 FROM instituciones_planes ip
-                  WHERE ip.institucionId = i.id AND ip.planMedicoId = :plan));
+       OR EXISTS (SELECT 1 FROM instituciones_coberturas ic
+                  WHERE ic.institucionId = i.id AND ic.obraSocialId = :obraSocial
+                    AND (ic.planMedicoId IS NULL OR ic.planMedicoId = :plan)));
 
 -- ¿Está libre el horario? (lo mismo que garantiza el índice parcial)
 SELECT COUNT(*) FROM turnos
@@ -142,6 +160,15 @@ model Usuario {
   rol           String
   nombre        String
   apellido      String
+  /// Foto de perfil (paciente o profesional): nombre del archivo en uploads/fotos/ ("<uuid>.jpg"), al azar y
+  /// nuevo en cada foto. La API la sirve en /api/fotos/<fotoArchivo>. Null = sin foto (se ven las iniciales).
+  fotoArchivo   String?  @unique
+  /// Verificación de identidad del registro (28/10/2026): se escaneó el código PDF417 del DNI y coincidió con el
+  /// DNI y el nombre de la cuenta. No se guarda la imagen ni el contenido del código: solo cuándo se verificó y un
+  /// HMAC-SHA256 del número de trámite (con SECRETO_IDENTIDAD), para que un mismo DNI físico no abra dos cuentas.
+  /// Null en las cuentas del seed y en la de admin.
+  identidadVerificadaEl DateTime?
+  tramiteHash   String?  @unique
   activo        Boolean  @default(true)
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -213,12 +240,16 @@ model ClaveIntegracion {
 model ObraSocial {
   id            String  @id @default(uuid())
   nombre        String  @unique
+  /// Nombre largo o aclaración ("Obra Social del Poder Judicial de la Nación"). Se muestra en los selectores.
+  descripcion   String?
   /// 'RNAS' (obras sociales) | 'RNEMP' (prepagas) | 'otro'
   registro      String?
   codigoOficial String?
   activa        Boolean @default(true)
 
-  planes PlanMedico[]
+  planes        PlanMedico[]
+  instituciones InstitucionCobertura[]
+  medicos       MedicoCobertura[]
 
   @@map("obras_sociales")
 }
@@ -232,27 +263,34 @@ model PlanMedico {
 
   obraSocial    ObraSocial        @relation(fields: [obraSocialId], references: [id])
   pacientes     Paciente[]
-  instituciones InstitucionPlan[]
-  medicos       MedicoPlan[]
+  instituciones InstitucionCobertura[]
+  medicos       MedicoCobertura[]
 
   @@unique([obraSocialId, nombre])
   @@map("planes_medicos")
 }
 
-/// Qué planes acepta cada institución privada (regla 1). Los públicos no necesitan filas (regla 15).
-model InstitucionPlan {
+/// Qué coberturas acepta una institución privada o de seguridad social (reglas 1 y 15). Las públicas no
+/// necesitan filas. planMedicoId null = todos los planes de esa obra social. Ver 08-coberturas.md.
+model InstitucionCobertura {
+  id            String  @id @default(uuid())
   institucionId String
-  planMedicoId  String
-  /// FuenteCobertura: cartilla consultada y fecha ("yyyy-MM-dd"). No hay fuente pública: se carga a mano.
+  obraSocialId  String
+  planMedicoId  String?
+  /// 'web_institucion' | 'cartilla_cobertura' | 'relevamiento_propio'
+  fuente        String
+  /// Página consultada. Null solo con 'relevamiento_propio'.
   fuenteUrl     String?
-  verificadoEl  String?
+  /// "yyyy-MM-dd" en que se verificó.
+  verificadoEl  String
 
   institucion Institucion @relation(fields: [institucionId], references: [id], onDelete: Cascade)
-  plan        PlanMedico  @relation(fields: [planMedicoId], references: [id], onDelete: Cascade)
+  obraSocial  ObraSocial  @relation(fields: [obraSocialId], references: [id], onDelete: Cascade)
+  plan        PlanMedico? @relation(fields: [planMedicoId], references: [id], onDelete: Cascade)
 
-  @@id([institucionId, planMedicoId])
-  @@index([planMedicoId])
-  @@map("instituciones_planes")
+  @@unique([institucionId, obraSocialId, planMedicoId])
+  @@index([obraSocialId])
+  @@map("instituciones_coberturas")
 }
 
 // ───────────── Instituciones y geografía ─────────────
@@ -271,7 +309,7 @@ model Institucion {
   creadaEn DateTime @default(now())
 
   sedes             Sede[]
-  planes            InstitucionPlan[]
+  coberturas        InstitucionCobertura[]
   favoritaDe        PacienteInstitucionFavorita[]
   ordenes           Orden[]
   resultados        Resultado[]
@@ -294,8 +332,9 @@ model Sede {
   /// establecimiento_id del REFES (14 dígitos). No lo tienen las altas del admin.
   refesId       String? @unique
 
-  institucion Institucion  @relation(fields: [institucionId], references: [id], onDelete: Cascade)
+  institucion Institucion      @relation(fields: [institucionId], references: [id], onDelete: Cascade)
   medicos     MedicoSede[]
+  franjas     FranjaAtencion[]
   turnos      Turno[]
 
   @@index([institucionId])
@@ -386,14 +425,14 @@ model Medico {
   subespecialidadId String?
   descripcion       String  @default("")
   aniosExperiencia  Int?
-  avatarUrl         String?
 
   usuario         Usuario                  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   padron          ProfesionalPadron?       @relation(fields: [padronId], references: [id])
   especialidad    Especialidad             @relation(fields: [especialidadId], references: [id])
   subespecialidad Subespecialidad?         @relation(fields: [subespecialidadId], references: [id])
   lugares         MedicoSede[]
-  planes          MedicoPlan[]
+  coberturas      MedicoCobertura[]
+  franjas         FranjaAtencion[]
   favoritoDe      PacienteMedicoFavorito[]
   notas           NotaPaciente[]
   turnos          Turno[]
@@ -408,6 +447,9 @@ model Medico {
 model Especialidad {
   id     String @id @default(uuid())
   nombre String @unique
+  /// Profesión del padrón a la que pertenece ("Médico", "Enfermero", "Kinesiólogo"): el registro solo ofrece las
+  /// de la profesión del profesional. Médicas: Res. 1814/2015; enfermería: Res. 199/2011 (Ministerio de Salud).
+  profesion String @default("Médico")
 
   subespecialidades Subespecialidad[]
   medicos           Medico[]
@@ -441,17 +483,41 @@ model MedicoSede {
   @@map("medicos_sedes")
 }
 
-/// Planes que acepta cada profesional (regla 1).
-model MedicoPlan {
+/// Franjas de atención: qué días y de qué hora a qué hora atiende el profesional en cada lugar. Las carga él
+/// en su Agenda (no se muestran en el perfil). Se ofrecen turnos de 30 min dentro de cada franja.
+model FranjaAtencion {
+  id         String @id @default(uuid())
+  medicoId   String
+  sedeId     String
+  /// 0 = domingo … 6 = sábado
+  diaSemana  Int
+  /// "HH:mm", múltiplo de 30 min
+  desde      String
+  /// "HH:mm", mayor que desde
+  hasta      String
+
+  medico Medico @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  sede   Sede   @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+
+  @@index([medicoId, diaSemana])
+  @@index([sedeId])
+  @@map("franjas_atencion")
+}
+
+/// Coberturas que atiende cada profesional (regla 1). Las elige él en su Perfil. Misma lógica de plan opcional.
+model MedicoCobertura {
+  id           String  @id @default(uuid())
   medicoId     String
-  planMedicoId String
+  obraSocialId String
+  planMedicoId String?
 
-  medico Medico     @relation(fields: [medicoId], references: [id], onDelete: Cascade)
-  plan   PlanMedico @relation(fields: [planMedicoId], references: [id], onDelete: Cascade)
+  medico     Medico      @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  obraSocial ObraSocial  @relation(fields: [obraSocialId], references: [id], onDelete: Cascade)
+  plan       PlanMedico? @relation(fields: [planMedicoId], references: [id], onDelete: Cascade)
 
-  @@id([medicoId, planMedicoId])
-  @@index([planMedicoId])
-  @@map("medicos_planes")
+  @@unique([medicoId, obraSocialId, planMedicoId])
+  @@index([obraSocialId])
+  @@map("medicos_coberturas")
 }
 
 /// Nota privada de un profesional sobre un paciente: solo la ve quien la escribió.
@@ -472,6 +538,7 @@ model NotaPaciente {
 // ───────────── Turnos ─────────────
 
 /// Fecha + hora + hospital (sede) + especialidad + médico: única entre los turnos activos (índice parcial).
+/// Además, un médico no tiene dos turnos activos a la misma fecha y hora (turnos_medico_activo).
 model Turno {
   id                String    @id @default(uuid())
   pacienteId        String
@@ -492,12 +559,16 @@ model Turno {
   /// Cuándo el médico lo confirmó o rechazó.
   respondidoEn      DateTime?
   canceladoEn       DateTime?
+  /// Al reprogramar: el turno (cancelado) que este reemplaza.
+  reprogramadoDesdeId String? @unique
 
-  paciente     Paciente     @relation(fields: [pacienteId], references: [id])
-  medico       Medico       @relation(fields: [medicoId], references: [id])
-  sede         Sede         @relation(fields: [sedeId], references: [id])
-  especialidad Especialidad @relation(fields: [especialidadId], references: [id])
-  feedback     Feedback?
+  paciente          Paciente     @relation(fields: [pacienteId], references: [id])
+  medico            Medico       @relation(fields: [medicoId], references: [id])
+  sede              Sede         @relation(fields: [sedeId], references: [id])
+  especialidad      Especialidad @relation(fields: [especialidadId], references: [id])
+  feedback          Feedback?
+  reprogramadoDesde Turno?       @relation("Reprogramacion", fields: [reprogramadoDesdeId], references: [id])
+  reprogramadoEn    Turno?       @relation("Reprogramacion")
 
   @@index([pacienteId, fecha])
   @@index([medicoId, fecha])
@@ -610,12 +681,14 @@ model Receta {
 model Feedback {
   id                  String   @id @default(uuid())
   turnoId             String   @unique
+  /// "¿Cómo fue tu consulta?": la única calificación obligatoria (28/10/2026). Es la que da la valoración.
   estrellas           Int
-  puntualidad         Int
-  atencion            Int
-  trato               Int
-  claridadExplicacion Int
-  experienciaGeneral  Int
+  /// Criterios opcionales: null = el paciente no lo calificó.
+  puntualidad         Int?
+  atencion            Int?
+  trato               Int?
+  claridadExplicacion Int?
+  experienciaGeneral  Int?
   comentario          String?
   /// Moderación del admin: oculto no cuenta en la valoración ni se muestra.
   oculto              Boolean  @default(false)
@@ -668,6 +741,39 @@ primera migración:
 CREATE UNIQUE INDEX "turnos_combinacion_activa"
   ON "turnos" ("fecha", "hora", "sedeId", "especialidadId", "medicoId")
   WHERE "estado" IN ('pendiente', 'confirmado');
+
+-- Un profesional no puede tener dos turnos activos a la misma fecha y hora, aunque sea en otro lugar.
+CREATE UNIQUE INDEX "turnos_medico_activo"
+  ON "turnos" ("medicoId", "fecha", "hora")
+  WHERE "estado" IN ('pendiente', 'confirmado');
+
+-- Franjas: día de la semana válido y desde < hasta (formato "HH:mm", se compara como texto).
+CREATE TRIGGER "franjas_validas_ins" BEFORE INSERT ON "franjas_atencion"
+WHEN NEW."diaSemana" NOT BETWEEN 0 AND 6 OR NEW."desde" >= NEW."hasta"
+  OR NEW."desde" NOT GLOB '[0-2][0-9]:[03]0' OR NEW."hasta" NOT GLOB '[0-2][0-9]:[03]0'
+BEGIN SELECT RAISE(ABORT, 'franja inválida'); END;
+
+-- Coberturas (08-coberturas.md): en SQLite los NULL no chocan en un UNIQUE, así que la fila
+-- "todos los planes" (planMedicoId NULL) necesita su propio índice parcial.
+CREATE UNIQUE INDEX "instituciones_coberturas_todos_los_planes"
+  ON "instituciones_coberturas" ("institucionId", "obraSocialId") WHERE "planMedicoId" IS NULL;
+CREATE UNIQUE INDEX "medicos_coberturas_todos_los_planes"
+  ON "medicos_coberturas" ("medicoId", "obraSocialId") WHERE "planMedicoId" IS NULL;
+
+-- El plan de una cobertura tiene que ser de esa obra social.
+CREATE TRIGGER "instituciones_coberturas_plan_de_la_obra_social" BEFORE INSERT ON "instituciones_coberturas"
+WHEN NEW."planMedicoId" IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM "planes_medicos" p WHERE p."id" = NEW."planMedicoId" AND p."obraSocialId" = NEW."obraSocialId")
+BEGIN SELECT RAISE(ABORT, 'el plan no es de esa obra social'); END;
+
+CREATE TRIGGER "medicos_coberturas_plan_de_la_obra_social" BEFORE INSERT ON "medicos_coberturas"
+WHEN NEW."planMedicoId" IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM "planes_medicos" p WHERE p."id" = NEW."planMedicoId" AND p."obraSocialId" = NEW."obraSocialId")
+BEGIN SELECT RAISE(ABORT, 'el plan no es de esa obra social'); END;
+
+CREATE TRIGGER "instituciones_coberturas_fuente_valida" BEFORE INSERT ON "instituciones_coberturas"
+WHEN NEW."fuente" NOT IN ('web_institucion', 'cartilla_cobertura', 'relevamiento_propio')
+BEGIN SELECT RAISE(ABORT, 'fuente inválida'); END;
 
 -- Valores permitidos. SQLite no tiene ENUM ni permite agregar CHECK con ALTER TABLE, así que se usan
 -- triggers que abortan el INSERT o el UPDATE (hacen lo mismo que un CHECK).
@@ -747,18 +853,23 @@ BEGIN SELECT RAISE(ABORT, 'las calificaciones van de 1 a 5'); END;
 
 ## Datos iniciales (seed)
 
-`prisma/seed.ts` carga lo mismo que hoy usan los mocks del frontend, para que la app funcione igual al
-cambiar los services por la API:
+`npm run db:seed` (`backend/src/seed.ts`) **borra la base y la vuelve a cargar** con lo mismo que usaban los
+mocks del frontend, **con los mismos ids** (`pac-sofia`, `med-sosa`, `plan-osde210`, `refes-…`), para que la
+app muestre lo mismo mientras los services se pasan a la API módulo por módulo. Los datos están en
+`backend/prisma/datos/demo.json`, exportado de los mocks el 27/10/2026 (ahora es la fuente: los mocks de los módulos conectados se borraron del frontend): las fechas son relativas a ese día y el
+seed las corre a la fecha en que se ejecuta (un turno "en 4 días" sigue estando en 4 días).
 
-| Qué | De dónde |
+| Qué | Cuánto |
 |---|---|
-| Obras sociales y planes | `frontend/src/mocks/planesMedicos.ts` (OSDE, Swiss Medical, Galeno, Medifé). |
-| Especialidades y subespecialidades | `frontend/src/mocks/especialidades.ts`. |
-| Instituciones y sedes | `frontend/src/mocks/data/refes-caba.json` (1.077 establecimientos reales del REFES, CABA). |
-| Planes aceptados por privadas | Hoy no hay dato público: se cargan a mano con `fuenteUrl` y `verificadoEl`. |
-| Padrón de profesionales | `frontend/src/mocks/padronProfesionales.ts`. |
-| Médicos, pacientes, turnos, órdenes, resultados, recetas | Los mocks del frontend, con las contraseñas hasheadas. |
-| Usuarios de prueba | Los mismos del `frontend/README.md` (`admin`, `12345678`, `42300300`). |
+| Obras sociales y planes | 26 y 80 ([08-coberturas.md](08-coberturas.md#catálogo-inicial)). |
+| Instituciones y sedes | 1.077 establecimientos reales del REFES (CABA), con las coberturas verificadas de 9 ([08](08-coberturas.md#seed-de-coberturas)). |
+| Especialidades, padrón | 78 especialidades con su profesión (Res. 1814/2015 y 199/2011); 6 fichas de padrón de prueba. |
+| Feedback | 27 opiniones de turnos cumplidos (24 turnos pasados agregados para eso): de ahí salen la valoración de cada profesional y el ranking del admin. Algunas solo con estrellas, otras con criterios. |
+| Usuarios | `admin`, 6 pacientes y 10 profesionales, con la contraseña hasheada (cuentas en `frontend/USUARIOS-DE-PRUEBA.md`). |
+| Profesionales | Lugares, coberturas (obra social entera) y franjas de atención de los mocks. |
+| Turnos, órdenes, recetas, notas, notificaciones | Los de los mocks. |
+| Resultados | 3, con un PDF de ejemplo generado por el seed en `backend/uploads/resultados/` (fuera de git). En este sprint es la única forma de cargar resultados. |
+| Fotos de perfil | Méndez y Ruiz, desde `backend/prisma/datos/fotos/<medicoId>.jpg` (Unsplash, de uso libre). El seed las copia a `uploads/fotos/` con nombre al azar, como una subida real. El resto de las cuentas arranca sin foto. |
 
 ## Qué cambió respecto del diagrama de agosto
 
@@ -769,11 +880,13 @@ cambiar los services por la API:
 | `tipos_consulta` y `turnos.tipo_consulta_id` | **Eliminados** | Se sacó el tipo de consulta de toda la app. |
 | `turnos` único por `(medico, sede, fecha, hora)` | Único por **fecha + hora + sede + especialidad + médico**, solo entre activos | Notas del Sprint 2; un cancelado o rechazado libera el horario. |
 | Estados `reprogramado` y sin `rechazado` | `pendiente` · `confirmado` · `rechazado` · `cancelado` · `completado` | Estados definidos en el Sprint 2. |
-| `horarios_disponibilidad`, `consultorios`, `sedes.horario_atencion` | **Eliminados** | Los horarios de atención salen del perfil; los resuelven los turnos. |
+| `horarios_disponibilidad`, `consultorios`, `sedes.horario_atencion` | **Eliminados**; en su lugar `franjas_atencion` (27/10/2026) | Los horarios salen del perfil; el profesional carga sus franjas por lugar y día en la Agenda. |
 | `estudios` con estado `pendiente/agendado/realizado/resultado_disponible` | `resultados` **sin estado** | El "Listo" es solo un aviso del frontend. |
 | Orden `pendiente/parcial/completada` | Orden **`pendiente/listo`** | Notas del Sprint 2. |
 | `tipos_estudio` + `orden_estudios` N:M | `orden_estudios` con el nombre del estudio | La orden se escribe a mano; no hay catálogo de estudios todavía. |
 | `recetas` + `receta_items` | Una medicación por receta | Así la emite el profesional en la app. |
 | — | `archivadoEl` en órdenes, resultados y recetas | Todo se puede archivar. |
 | `planes_medicos` sueltos | `obras_sociales` → `planes_medicos` | El admin carga obras sociales; el filtro es por plan. |
+| `medicos.avatarUrl` (URL externa) | `usuarios.fotoArchivo` (27/10/2026) | Pacientes y profesionales suben su foto desde el Perfil; se guarda como archivo en el servidor. |
+| `instituciones_planes`, `medicos_planes` (por plan) | `instituciones_coberturas`, `medicos_coberturas`: obra social + plan opcional, con fuente y fecha | Las fuentes reales informan por obra social y a veces por plan (27/10/2026, [08](08-coberturas.md)). |
 | — | `profesionales_padron`, `notas_paciente`, `claves_integracion` | Registro de profesionales contra el padrón, notas privadas y carga de PDF por terceros. |

@@ -1,4 +1,4 @@
-# Backend: Node.js + TypeScript (node:http) + Prisma + SQLite.
+# Backend: Node.js + TypeScript (Express 5) + Prisma + SQLite.
 
 # Secretos: nunca se commitean (claves, tokens, credenciales de la base de datos)
 .env

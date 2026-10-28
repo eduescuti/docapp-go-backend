@@ -1,152 +1,147 @@
-# Arquitectura del backend (sin framework)
+# Arquitectura del backend
+
+> **27/10/2026:** el servidor pasa de `node:http` a **Express**, con la misma estructura que la práctica
+> de la cátedra (`Practica17926` y el PDF *Práctica Prisma — Express + Prisma + SQLite + Expo*). Las notas
+> del Sprint 2 dicen "backend propio, sin framework": se interpreta como que el backend lo hace el equipo
+> (sin servicios armados tipo Firebase o Supabase) y que todo lo que Express no trae (sesiones, roles,
+> validación, reglas de negocio) se resuelve a mano. Express está en la teoría de la cátedra: **uso confirmado**.
 
 ## Stack
 
 | Capa | Con qué | Por qué |
 |---|---|---|
-| Servidor HTTP | `node:http` (módulo nativo de Node.js) | La consigna es no usar framework: el router, los middlewares, el body JSON y CORS los escribimos nosotros. |
+| Servidor HTTP | **Express 5** | Es lo que usa la práctica de la cátedra. Resuelve el router, el body JSON y los middlewares; lo demás es nuestro. Express 5 manda solo al manejador de errores lo que tira una ruta `async`. |
 | Lenguaje | TypeScript (`strict: true`) | Igual que el frontend. Los tipos de la API salen de los mismos nombres que `src/domain/`. |
-| Acceso a datos | Prisma ORM | Es lo que vimos en la práctica de clase: schema tipado, cliente generado y migraciones. No es un framework web: solo habla con la base. |
-| Base de datos | SQLite (un archivo `.db`) | Sin servidor aparte, alcanza para el TP. Si después se pasa a PostgreSQL, cambia el `provider` del schema y no la app. |
-| Criptografía | `node:crypto` | `scrypt` para contraseñas, `randomBytes` para tokens, `createHash` para guardarlos hasheados. Sin librerías extra. |
+| Acceso a datos | **Prisma 6** (`prisma` + `@prisma/client`, la misma versión que la práctica) | Schema tipado y cliente generado. Las tablas se crean con `prisma migrate` (no con un `initDb` a mano como en la práctica: son 26 tablas y no se mantienen dos veces). |
+| Base de datos | SQLite (`prisma/dev.db`) | Sin servidor aparte, alcanza para el TP. Si después se pasa a PostgreSQL, cambia el `provider` del schema y no la app. |
+| CORS y `.env` | `cors`, `dotenv` | Como en la práctica. |
+| Criptografía | `node:crypto` | `scrypt` para contraseñas, `randomBytes` para tokens, `createHash` para guardarlos hasheados. Sin `bcrypt` ni `jsonwebtoken`. |
 
-Dependencias: `prisma`, `@prisma/client`, `typescript`, `tsx` (para correr TS en desarrollo) y
-`@types/node`. Nada más. **No** `express`, `cors`, `body-parser`, `jsonwebtoken` ni `bcrypt`: cada una
-resuelve algo que la consigna pide hacer a mano.
+Dependencias: `express`, `cors`, `dotenv`, `@prisma/client`; de desarrollo `prisma`, `typescript`,
+`ts-node`, `ts-node-dev`, `@types/express`, `@types/cors`, `@types/node`. Las mismas que la práctica,
+menos `sqlite3` (Prisma ya trae su motor y las tablas no se crean a mano).
 
 ## Capas
 
-Igual que en la práctica de Prisma, cada capa sabe lo mínimo de la siguiente:
+Igual que en la práctica: cada capa sabe lo mínimo de la siguiente.
 
 ```
-App (Expo)  ──HTTP + JSON──▶  Servidor (node:http)  ──▶  Rutas  ──▶  Servicios  ──▶  Prisma  ──▶  SQLite
- fetch()                       body, CORS, errores        validan      reglas de       consultas    archivo
-                               token, rol                 la entrada   negocio         tipadas      .db
+App (Expo)  ──HTTP + JSON──▶  Express  ──▶  Rutas  ──▶  Servicios  ──▶  Prisma  ──▶  SQLite
+ fetch()                      cors, json,   validan     reglas de       consultas    dev.db
+                              sesión, rol   la entrada  negocio         tipadas
 ```
 
 - **El celular nunca toca la base.** Pide datos a la API; la API decide.
-- **Rutas** (`rutas/*.ts`): leen parámetros y body, validan la forma, llaman a un servicio y responden.
+- **Middlewares** (`middlewares/*.ts`): `autenticar` (token → `req.usuario`), `requerirRol(...)`, límite
+  de intentos de login y el manejador de errores al final de todo.
+- **Rutas** (`rutas/*.ts`, un `express.Router()` por recurso): leen parámetros y body, toman solo los
+  campos que esperan (como el `pick` de la práctica), validan formato, llaman a un servicio y responden.
   No tienen reglas de negocio.
-- **Servicios** (`servicios/*.ts`): las reglas del dominio (unicidad de turnos, quién puede confirmar,
-  vencimiento, filtro por obra social). No saben nada de HTTP.
-- **Prisma**: consultas. Las reglas que la base puede garantizar sola (claves foráneas, `UNIQUE`,
-  `CHECK`) van en la base además de en el código.
+- **Servicios** (`servicios/*.ts`): las reglas del dominio (unicidad de turnos, franjas, cobertura, quién
+  puede confirmar, vencimiento). No saben nada de HTTP: tiran `ErrorHttp` y el manejador de errores lo
+  traduce.
+- **Prisma**: consultas. Lo que la base puede garantizar sola (claves foráneas, `UNIQUE`, índices
+  parciales, triggers) va en la base además de en el código.
 
-## Estructura de carpetas propuesta
+## Estructura de carpetas
 
 ```
 backend/
   package.json
-  tsconfig.json
-  .env.example              # PORT, DATABASE_URL, DURACION_SESION_HORAS (el .env real no se commitea)
+  tsconfig.json             # el de la práctica (ES2022, NodeNext, strict, outDir dist, rootDir src)
+  .env.example              # PORT, DATABASE_URL, DIAS_SESION_INACTIVA, ORIGEN_PERMITIDO (el .env no se commitea)
   prisma/
     schema.prisma           # el modelo de 03-base-de-datos.md
-    migrations/             # generadas por prisma migrate (incluyen los índices parciales a mano)
-    seed.ts                 # datos iniciales: planes, especialidades, REFES, padrón, usuarios de prueba
+    migrations/             # generadas por prisma migrate (la primera suma a mano los índices parciales y triggers)
+    datos/demo.json         # datos iniciales, exportados de los mocks del frontend (mismos ids)
+    datos/fotos/            # fotos de perfil de ejemplo del seed (<medicoId>.jpg)
+    dev.db                  # la base (fuera de git)
   src/
-    index.ts                # crea el servidor y escucha en PORT
-    http/
-      router.ts             # tabla de rutas: método + patrón ("/api/turnos/:id") + handler
-      body.ts               # lee el body JSON con límite de tamaño
-      respuestas.ts         # enviarJson(res, status, datos), enviarError(res, error)
-      errores.ts            # clase ErrorHttp(status, mensaje) y su traducción a respuesta
-      cors.ts               # cabeceras CORS y respuesta al preflight OPTIONS
+    index.ts                # crea la app: cors, express.json, rutas, manejador de errores, listen(PORT)
+    db.ts                   # una sola instancia de PrismaClient
+    errores.ts              # clase ErrorHttp(status, mensaje)
+    middlewares/
+      autenticar.ts         # Authorization: Bearer → req.usuario (y renueva el vencimiento)
+      requerirRol.ts
+      limiteLogin.ts        # intentos fallidos por DNI e IP
+      manejarErrores.ts     # ErrorHttp y errores de Prisma → { error }, el resto → 500
     auth/
       contrasenas.ts        # hashear / verificar con scrypt
       sesiones.ts           # crear token, validarlo, revocarlo
-      middleware.ts         # autenticar(req) y requerirRol(...)
-    rutas/                  # una por recurso: auth, turnos, ordenes, resultados, recetas, ...
+    rutas/                  # auth, planes, instituciones, medicos, pacientes, turnos, ordenes, resultados, recetas, admin
     servicios/              # reglas de negocio por módulo
-    db.ts                   # una sola instancia de PrismaClient
-  uploads/                  # PDF de resultados (fuera de git: son datos médicos)
+  uploads/                  # fuera de git
+    resultados/             # PDF de resultados (datos médicos: solo por GET autorizado)
+    fotos/                  # fotos de perfil (<uuid>.jpg; ver 06-reglas-de-negocio.md, "Fotos de perfil")
 ```
 
-## Lo que un framework haría y acá hay que resolver a mano
-
-### 1. Servidor y router
-
-`node:http` entrega cada pedido a una sola función. El router es una lista de rutas que se recorre
-hasta encontrar la que coincide en método y patrón. Los parámetros (`:id`) se sacan con una expresión
-regular armada a partir del patrón.
+## `src/index.ts`
 
 ```ts
-// src/http/router.ts (idea, no código final)
-type Handler = (ctx: Contexto) => Promise<void>;
-interface Ruta { metodo: string; patron: RegExp; claves: string[]; handler: Handler }
+// src/index.ts (idea, no código final)
+import "dotenv/config";
+import cors from "cors";
+import express from "express";
 
-const rutas: Ruta[] = [];
+import { manejarErrores } from "./middlewares/manejarErrores";
+import { rutasAuth } from "./rutas/auth";
+import { rutasTurnos } from "./rutas/turnos";
+// ...el resto de las rutas
 
-export function ruta(metodo: string, camino: string, handler: Handler) {
-  const claves: string[] = [];
-  const patron = new RegExp(
-    "^" + camino.replace(/:([a-zA-Z]+)/g, (_, clave) => { claves.push(clave); return "([^/]+)"; }) + "$",
-  );
-  rutas.push({ metodo, patron, claves, handler });
-}
+const app = express();
+const port = Number(process.env.PORT ?? 3000);
 
-export function resolver(metodo: string, pathname: string) {
-  for (const r of rutas) {
-    const m = r.patron.exec(pathname);
-    if (r.metodo === metodo && m) {
-      return { handler: r.handler, params: Object.fromEntries(r.claves.map((c, i) => [c, decodeURIComponent(m[i + 1])])) };
-    }
-  }
-  return null; // → 404, o 405 si el camino existe con otro método
-}
+// Primero los middlewares (el orden importa: cors antes de las rutas).
+app.use(cors({ origin: process.env.ORIGEN_PERMITIDO }));
+// La foto de perfil va en base64 y pesa más de 100 kb: su ruta lee el JSON antes, con su propio límite.
+app.use("/api/usuarios/yo/foto", parserFoto);
+app.use(express.json({ limit: "100kb" }));
+
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
+app.use("/api/auth", rutasAuth);
+app.use("/api/turnos", rutasTurnos);
+// ...
+
+// Al final: lo que no encontró ruta y los errores.
+app.use((_req, res) => {
+  res.status(404).json({ error: "No existe esa ruta." });
+});
+app.use(manejarErrores);
+
+app.listen(port, () => {
+  console.log(`API escuchando en http://localhost:${port}`);
+});
 ```
 
-La query (`?desde=2026-10-01`) se lee con `new URL(req.url, "http://localhost").searchParams`.
+## Lo que Express no trae y hay que resolver a mano
 
-### 2. Body JSON
+### 1. Validar la entrada
 
-`req` es un stream: hay que juntar los pedazos, cortar si pasa un límite (para que nadie mande 1 GB) y
-recién ahí hacer `JSON.parse` dentro de un `try`.
+`express.json()` solo convierte el texto en objeto. Cada ruta toma **solo** los campos que espera y
+valida tipos y formatos: fechas `yyyy-MM-dd`, horas `HH:mm`, ids no vacíos, textos con largo máximo. Que
+un dato tenga forma correcta es tarea de la ruta; que tenga sentido (el horario está libre, el turno es
+tuyo) es tarea del servicio.
 
-```ts
-// src/http/body.ts (idea)
-const LIMITE_BYTES = 100_000;
+### 2. Sesión y rol
 
-export async function leerJson(req: IncomingMessage): Promise<unknown> {
-  if (!req.headers["content-type"]?.startsWith("application/json")) throw new ErrorHttp(415, "El body tiene que ser JSON.");
-  let total = 0;
-  const partes: Buffer[] = [];
-  for await (const parte of req) {
-    total += parte.length;
-    if (total > LIMITE_BYTES) throw new ErrorHttp(413, "El body es demasiado grande.");
-    partes.push(parte);
-  }
-  try {
-    return JSON.parse(Buffer.concat(partes).toString("utf8"));
-  } catch {
-    throw new ErrorHttp(400, "El JSON no es válido.");
-  }
-}
-```
+Middleware `autenticar` en todas las rutas no públicas y `requerirRol(...)` en cada router o ruta. El
+detalle está en [05-sesiones-y-tokens.md](05-sesiones-y-tokens.md).
 
-Después del parseo, **cada ruta toma solo los campos que espera** (como el `pick` de la práctica) y
-valida tipos y formatos: fechas `yyyy-MM-dd`, horas `HH:mm`, ids no vacíos, textos con largo máximo.
+### 3. Respuestas y errores
 
-### 3. CORS
-
-La app en web (`npx expo start --web`, `http://localhost:8081`) llama a la API desde otro origen. El
-navegador manda primero un `OPTIONS` (preflight) cuando hay `Authorization` o `Content-Type: application/json`.
-
-- Responder `OPTIONS` con `204` y las cabeceras `Access-Control-Allow-Origin` (el origen permitido, no `*`
-  en producción), `Access-Control-Allow-Methods: GET,POST,PATCH,DELETE` y
-  `Access-Control-Allow-Headers: Content-Type, Authorization`.
-- Poner `Access-Control-Allow-Origin` también en las respuestas normales.
-- En Expo Go (celular) no hay CORS: es una app nativa, no un navegador.
-
-### 4. Respuestas y errores
-
-- Siempre JSON con `Content-Type: application/json; charset=utf-8`, salvo `204 No Content` (sin body) y
-  la descarga de PDF (`application/pdf`).
-- Errores con la forma `{ "error": "mensaje para mostrar" }`, como en la práctica de clase. El frontend
-  ya muestra `e.message` en sus pantallas.
-- Un `try/catch` global en el handler del servidor: lo que no se previó responde `500` con un mensaje
-  genérico y se loguea completo en la consola. **Nunca** se manda el stack ni el error de Prisma al cliente.
+- Siempre JSON, salvo `204 No Content` (sin body: `res.status(204).end()`) y la descarga de PDF
+  (`application/pdf`).
+- Errores con la forma `{ "error": "mensaje para mostrar" }`, como en la práctica. El frontend ya muestra
+  `e.message` en sus pantallas.
+- Un solo manejador de errores al final (`manejarErrores`): un `ErrorHttp` responde su status y mensaje; lo
+  no previsto responde `500` con un mensaje genérico y se loguea completo en la consola. **Nunca** se manda
+  el stack ni el error de Prisma al cliente.
 - Errores de Prisma que se traducen: `P2002` (violó un `UNIQUE`) → `409 Conflict`, `P2025` (no existe) →
-  `404`, `P2003` (FK inválida) → `400`.
+  `404`, `P2003` (FK inválida) → `400`. **Ojo:** en SQLite, cuando un trigger de validación rechaza un dato
+  (`RAISE(ABORT, ...)`), Prisma lo informa también como `P2003` ("Foreign key constraint violated") y sin el
+  mensaje del trigger. Por eso los servicios validan antes y dan el mensaje claro; la base es la última barrera.
 
 | Status | Cuándo |
 |---|---|
@@ -155,25 +150,28 @@ navegador manda primero un `OPTIONS` (preflight) cuando hay `Authorization` o `C
 | `204 No Content` | Se borró o se cerró sesión; sin body. |
 | `400 Bad Request` | Faltan datos o tienen mal formato. |
 | `401 Unauthorized` | No hay token, venció o fue revocado. |
-| `403 Forbidden` | Hay sesión pero el rol o el dueño no corresponde. |
+| `403 Forbidden` | Hay sesión pero el rol no corresponde. |
 | `404 Not Found` | El recurso no existe **o no es tuyo** (para no revelar que existe). |
-| `409 Conflict` | Choca con el estado: horario ya tomado, turno que ya no está pendiente. |
-| `413` / `415` | Body demasiado grande / no es JSON. |
+| `409 Conflict` | Choca con el estado: horario ya tomado, turno que ya no está pendiente, fuera de plazo. |
+| `413` | Body demasiado grande (lo responde `express.json` con el límite). |
 | `429 Too Many Requests` | Demasiados intentos de login. |
 | `500` | Error nuestro, no previsto. |
 
+### 4. CORS
+
+`cors({ origin: ORIGEN_PERMITIDO })` antes de las rutas: la app en web (`http://localhost:8081`) llama
+desde otro origen. En Expo Go (celular) no hay CORS: es una app nativa, no un navegador.
+
 ### 5. Configuración
 
-Variables en `.env` (está en `.gitignore`), con un `.env.example` versionado sin valores reales:
+Variables en `.env` (en `.gitignore`), con un `.env.example` versionado sin valores reales:
 
 ```
 PORT=3000
 DATABASE_URL="file:./dev.db"
-DURACION_SESION_HORAS=720
+DIAS_SESION_INACTIVA=90
 ORIGEN_PERMITIDO=http://localhost:8081
 ```
-
-`node --env-file=.env` (Node 20.6+) las carga sin librerías.
 
 ### 6. Fechas y horas
 
@@ -185,22 +183,26 @@ ORIGEN_PERMITIDO=http://localhost:8081
 
 ### 7. SQLite
 
-- Activar las claves foráneas: Prisma lo hace solo en SQLite, pero si se usa SQL a mano, `PRAGMA foreign_keys = ON`.
-- Las escrituras en SQLite son de a una: reservar un turno dentro de una transacción
-  (`prisma.$transaction`) alcanza para que dos pedidos simultáneos no tomen el mismo horario, y el
-  índice único parcial lo garantiza igual si algo se escapa.
+- Prisma activa las claves foráneas solo en SQLite.
+- Las escrituras en SQLite son de a una: reservar un turno dentro de `prisma.$transaction` alcanza para
+  que dos pedidos simultáneos no tomen el mismo horario, y los índices únicos parciales lo garantizan igual
+  si algo se escapa.
 
 ## Scripts
+
+Los de la práctica, con migraciones y seed en lugar de `db:init`:
 
 ```json
 {
   "scripts": {
-    "dev": "tsx watch --env-file=.env src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
-    "start": "node --env-file=.env dist/index.js",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:seed": "ts-node src/seed.ts",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
   }
 }
 ```
@@ -214,11 +216,13 @@ curl -s http://localhost:3000/api/health
 curl -s -X POST http://localhost:3000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"dni":"12345678","password":"Paciente123$"}'
-# { "token": "…", "expiraEn": "…", "sesion": { "rol": "paciente", … } }
+# { "token": "…", "sesion": { "rol": "paciente", … } }
 
 curl -s http://localhost:3000/api/pacientes/yo/turnos -H "Authorization: Bearer <token>"
 ```
 
 Desde el celular con Expo Go, la app no puede usar `localhost`: hay que apuntar a la IP de la
 computadora en la red (`http://192.168.x.x:3000`), con los dos en la misma red. La URL va en una
-variable de entorno del frontend (`EXPO_PUBLIC_API_URL`), no escrita en el código.
+variable de entorno del frontend (`EXPO_PUBLIC_API_URL`), no escrita en el código. Antes de tocar nada
+cuando algo no anda: probar `/api/health` (los cinco errores de siempre están en la diapositiva 19 de la
+práctica).

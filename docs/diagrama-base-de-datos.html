@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Base de datos DocApp Go</title>
-<meta name="description" content="Diagrama entidad–relación de la base de datos de DocApp Go (Sprint 2): 26 tablas, relaciones, restricciones y reglas de negocio.">
+<meta name="description" content="Diagrama entidad–relación de la base de datos de DocApp Go (Sprint 2): 27 tablas, relaciones, restricciones y reglas de negocio.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -253,7 +253,7 @@
     <p class="sub">
       SQLite + Prisma. Usuarios con login por DNI, cobertura por obra social y plan, hospitales del REFES,
       profesionales con lugares de atención, turnos con estados, órdenes con indicaciones, resultados en PDF,
-      recetas y feedback. Tocá una tabla para ver sus relaciones y su detalle.
+      recetas, feedback y registro con DNI verificado. Tocá una tabla para ver sus relaciones y su detalle.
     </p>
     <div class="stats" id="stats"></div>
   </div>
@@ -371,7 +371,7 @@
     { key: "turnos", nombre: "Turnos", desc: "Reservas con estado y combinación única." },
     { key: "recetas", nombre: "Recetas, feedback y avisos", desc: "Recetas, calificación de turnos y notificaciones." },
     { key: "instituciones", nombre: "Instituciones", desc: "Hospitales: nombre, dirección, latitud y longitud." },
-    { key: "cobertura", nombre: "Cobertura", desc: "Obras sociales, planes y qué planes acepta cada institución." },
+    { key: "cobertura", nombre: "Cobertura", desc: "Obras sociales, planes y qué coberturas acepta cada institución." },
     { key: "estudios", nombre: "Estudios", desc: "Órdenes con indicaciones, estudios pedidos y resultados en PDF." },
   ];
 
@@ -382,9 +382,12 @@
       c("passwordHash", "TEXT", { nota: "scrypt (salt:hash), nunca en texto plano" }),
       c("rol", "TEXT", { vals: "paciente | doctor | admin" }),
       c("nombre", "TEXT"), c("apellido", "TEXT"),
+      c("fotoArchivo", "TEXT", { uq: true, nul: true, nota: "foto de perfil: nombre del archivo en uploads/fotos/, al azar" }),
+      c("identidadVerificadaEl", "DATETIME", { nul: true, nota: "cuándo escaneó su DNI en el registro (null en el seed y en admin)" }),
+      c("tramiteHash", "TEXT", { uq: true, nul: true, nota: "HMAC-SHA256 del número de trámite del DNI: un DNI no abre dos cuentas" }),
       c("activo", "BOOLEAN", { def: "true" }),
       c("creadoEn", "DATETIME", { def: "now()" }), c("actualizadoEn", "DATETIME"),
-    ], notas: ["El rol lo determina la cuenta: no se elige al entrar.", "pacientes y medicos extienden esta tabla (1 a 0..1); el admin no tiene fila extra."] },
+    ], notas: ["El rol lo determina la cuenta: no se elige al entrar.", "pacientes y medicos extienden esta tabla (1 a 0..1); el admin no tiene fila extra.", "Verificación de identidad (28/10/2026): no se guarda imagen ni contenido del código del DNI, solo la fecha y el HMAC del trámite (clave SECRETO_IDENTIDAD, fuera de la base)."] },
 
     { key: "sesiones", mod: "identidad", desc: "Tokens de sesión. Solo se guarda su hash.", cols: [
       c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios" }),
@@ -414,9 +417,10 @@
       c("matricula", "TEXT"), c("estadoMatricula", "TEXT"), c("activo", "BOOLEAN"),
     ], notas: ["UNIQUE (dni, matricula, profesion): la terna del registro de profesional (regla 13)."] },
 
-    { key: "medicos_planes", mod: "profesionales", desc: "Planes que acepta cada profesional (regla 1).", cols: [
-      c("medicoId", "TEXT", { pk: true, fk: "medicos" }), c("planMedicoId", "TEXT", { pk: true, fk: "planes_medicos" }),
-    ] },
+    { key: "medicos_coberturas", mod: "profesionales", desc: "Coberturas que atiende cada profesional (regla 1). Las elige él en su Perfil.", cols: [
+      c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }),
+      c("obraSocialId", "TEXT", { fk: "obras_sociales" }), c("planMedicoId", "TEXT", { fk: "planes_medicos", nul: true, nota: "null = todos los planes" }),
+    ], notas: ["UNIQUE (medicoId, obraSocialId, planMedicoId) + índice parcial para la fila sin plan.", "El plan tiene que ser de esa obra social (trigger)."] },
 
     { key: "planes_medicos", mod: "cobertura", desc: "Plan de una obra social (\"OSDE 210\"). Filtro transversal de la app.", cols: [
       c("id", "TEXT", { pk: true }), c("obraSocialId", "TEXT", { fk: "obras_sociales" }),
@@ -445,12 +449,13 @@
       c("matricula", "TEXT"), c("profesion", "TEXT", { nota: "\"Médico\", \"Enfermero\", …" }),
       c("genero", "TEXT", { vals: "femenino | masculino" }),
       c("especialidadId", "TEXT", { fk: "especialidades" }), c("subespecialidadId", "TEXT", { fk: "subespecialidades", nul: true }),
-      c("descripcion", "TEXT"), c("aniosExperiencia", "INTEGER", { nul: true }), c("avatarUrl", "TEXT", { nul: true }),
+      c("descripcion", "TEXT"), c("aniosExperiencia", "INTEGER", { nul: true }),
     ], notas: ["Sin horarios de atención (Sprint 2): la disponibilidad la resuelven los turnos.", "La valoración se calcula de feedbacks.", "UNIQUE (matricula, profesion)."] },
 
-    { key: "especialidades", mod: "profesionales", desc: "Especialidad médica.", cols: [
+    { key: "especialidades", mod: "profesionales", desc: "Especialidad de una profesión del padrón.", cols: [
       c("id", "TEXT", { pk: true }), c("nombre", "TEXT", { uq: true }),
-    ] },
+      c("profesion", "TEXT", { def: "'Médico'", vals: "Médico | Enfermero | Kinesiólogo" }),
+    ], notas: ["78 en el seed: 70 médicas (Res. 1814/2015), 7 de enfermería (Res. 199/2011) y Kinesiología y Fisioterapia.", "El registro del profesional solo ofrece las de su profesión."] },
 
     { key: "subespecialidades", mod: "profesionales", desc: "Subespecialidad dentro de una especialidad.", cols: [
       c("id", "TEXT", { pk: true }), c("especialidadId", "TEXT", { fk: "especialidades" }), c("nombre", "TEXT"),
@@ -470,15 +475,17 @@
       c("ocultoEnHistorial", "BOOLEAN", { def: "false" }),
       c("creadoEn", "DATETIME", { def: "now()" }), c("actualizadoEn", "DATETIME"),
       c("respondidoEn", "DATETIME", { nul: true }), c("canceladoEn", "DATETIME", { nul: true }),
-    ], notas: ["UNIQUE parcial (fecha, hora, sedeId, especialidadId, medicoId) entre pendientes y confirmados: no hay doble reserva y un cancelado o rechazado libera el horario.", "Vencimiento automático: confirmado → completado, pendiente → rechazado.", "Sin tipo de consulta (se eliminó en el Sprint 2)."] },
+      c("reprogramadoDesdeId", "TEXT", { fk: "turnos", nul: true, uq: true, nota: "turno que reemplaza al reprogramar" }),
+    ], notas: ["UNIQUE parcial (fecha, hora, sedeId, especialidadId, medicoId) entre pendientes y confirmados: no hay doble reserva y un cancelado o rechazado libera el horario.", "UNIQUE parcial (medicoId, fecha, hora) entre activos: un médico no está en dos lugares a la vez.", "Reprogramar: el viejo queda cancelado y el nuevo nace pendiente (sin estado reprogramado).", "Vencimiento automático: confirmado → completado, pendiente → rechazado.", "Sin tipo de consulta (se eliminó en el Sprint 2)."] },
 
     { key: "feedbacks", mod: "recetas", desc: "Calificación de un turno completado.", cols: [
       c("id", "TEXT", { pk: true }), c("turnoId", "TEXT", { fk: "turnos", uq: true }),
-      c("estrellas", "INTEGER", { vals: "1 a 5" }), c("puntualidad", "INTEGER"), c("atencion", "INTEGER"), c("trato", "INTEGER"),
-      c("claridadExplicacion", "INTEGER"), c("experienciaGeneral", "INTEGER"),
+      c("estrellas", "INTEGER", { vals: "1 a 5", nota: "¿Cómo fue tu consulta? (la única obligatoria)" }),
+      c("puntualidad", "INTEGER", { nul: true }), c("atencion", "INTEGER", { nul: true }), c("trato", "INTEGER", { nul: true }),
+      c("claridadExplicacion", "INTEGER", { nul: true }), c("experienciaGeneral", "INTEGER", { nul: true }),
       c("comentario", "TEXT", { nul: true }), c("oculto", "BOOLEAN", { def: "false", nota: "moderación del admin" }),
       c("creadoEn", "DATETIME", { def: "now()" }),
-    ], notas: ["Uno por turno completado (regla 6). El profesional sale del turno."] },
+    ], notas: ["Uno por turno completado (regla 6). El profesional sale del turno.", "Criterios opcionales (28/10/2026): null = no calificado. La valoración del profesional sale de estrellas."] },
 
     { key: "recetas", mod: "recetas", desc: "Nombre + dosis + cómo tomarla + duración + indicación + médico + fecha de emisión.", cols: [
       c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }), c("pacienteId", "TEXT", { fk: "pacientes" }),
@@ -512,10 +519,18 @@
       c("medicoId", "TEXT", { pk: true, fk: "medicos" }), c("sedeId", "TEXT", { pk: true, fk: "sedes" }),
     ] },
 
-    { key: "instituciones_planes", mod: "cobertura", desc: "Qué planes acepta cada institución privada.", cols: [
-      c("institucionId", "TEXT", { pk: true, fk: "instituciones" }), c("planMedicoId", "TEXT", { pk: true, fk: "planes_medicos" }),
-      c("fuenteUrl", "TEXT", { nul: true, nota: "cartilla consultada" }), c("verificadoEl", "TEXT", { nul: true }),
-    ], notas: ["No hay fuente pública: se carga a mano desde cada cartilla."] },
+    { key: "franjas_atencion", mod: "profesionales", desc: "Qué días y de qué hora a qué hora atiende el profesional en cada lugar. Las carga en su Agenda.", cols: [
+      c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }), c("sedeId", "TEXT", { fk: "sedes" }),
+      c("diaSemana", "INTEGER", { vals: "0 (domingo) a 6 (sábado)" }),
+      c("desde", "TEXT", { nota: "HH:mm, múltiplo de 30 min" }), c("hasta", "TEXT", { nota: "HH:mm, mayor que desde" }),
+    ], notas: ["Se ofrecen turnos de 30 min dentro de cada franja.", "Las franjas de un médico no se pisan entre lugares (lo valida el servicio)."] },
+
+    { key: "instituciones_coberturas", mod: "cobertura", desc: "Qué coberturas acepta cada institución privada o de seguridad social.", cols: [
+      c("id", "TEXT", { pk: true }), c("institucionId", "TEXT", { fk: "instituciones" }),
+      c("obraSocialId", "TEXT", { fk: "obras_sociales" }), c("planMedicoId", "TEXT", { fk: "planes_medicos", nul: true, nota: "null = todos los planes" }),
+      c("fuente", "TEXT", { vals: "web_institucion | cartilla_cobertura | relevamiento_propio" }),
+      c("fuenteUrl", "TEXT", { nul: true, nota: "página consultada" }), c("verificadoEl", "TEXT"),
+    ], notas: ["No hay fuente pública: la carga el admin (o el seed verificado).", "UNIQUE (institucionId, obraSocialId, planMedicoId) + índice parcial para la fila sin plan."] },
 
     { key: "ordenes", mod: "estudios", desc: "Orden que el médico asigna al paciente: hospital + fecha + médico + indicaciones.", cols: [
       c("id", "TEXT", { pk: true }), c("medicoId", "TEXT", { fk: "medicos" }), c("pacienteId", "TEXT", { fk: "pacientes" }),
@@ -548,10 +563,10 @@
   // Columnas del lienzo: así quedan juntas las tablas que se relacionan más.
   const LAYOUT = [
     ["sesiones", "registro_auditoria", "notificaciones"],
-    ["usuarios", "profesionales_padron", "medicos_planes", "planes_medicos", "obras_sociales"],
+    ["usuarios", "profesionales_padron", "medicos_coberturas", "planes_medicos", "obras_sociales"],
     ["pacientes", "pacientes_medicos_favoritos", "medicos", "especialidades", "subespecialidades"],
     ["notas_paciente", "turnos", "feedbacks", "recetas"],
-    ["pacientes_instituciones_favoritas", "instituciones", "sedes", "medicos_sedes", "instituciones_planes"],
+    ["pacientes_instituciones_favoritas", "instituciones", "sedes", "medicos_sedes", "franjas_atencion", "instituciones_coberturas"],
     ["ordenes", "orden_estudios", "resultados", "claves_integracion"],
   ];
   const ANCHO = 268, PASO_X = 380, GAP_Y = 34;
@@ -561,13 +576,17 @@
     { tag: "Sprint 2", t: "Estados del turno", p: "<code>turnos.estado</code> solo acepta pendiente, confirmado, rechazado, cancelado y completado (trigger). Todo turno nace <code>pendiente</code>." },
     { tag: "Sprint 2", t: "Todo se archiva", p: "<code>archivadoEl</code> en <code>ordenes</code>, <code>resultados</code> y <code>recetas</code>. Null = no archivado; la fecha define la carpeta año → mes." },
     { tag: "Sprint 2", t: "Resultados sin estado", p: "<code>resultados</code> no tiene columna de estado. El \"Nuevo\" que ve el paciente se guarda en el teléfono." },
-    { tag: "Sprint 2", t: "Perfil sin horarios", p: "No hay tabla de horarios de atención. Los lugares de atención del perfil son <code>medicos_sedes</code>." },
-    { tag: "Reglas 1 y 15", t: "Hospitales por obra social", p: "Se ve una institución si <code>origen = 'publico'</code> o si hay fila en <code>instituciones_planes</code> para el plan del paciente." },
+    { tag: "Sprint 2", t: "Perfil sin horarios", p: "El perfil no muestra horarios. Los lugares de atención son <code>medicos_sedes</code> y la disponibilidad sale de <code>franjas_atencion</code>, que el profesional carga en su Agenda." },
+    { tag: "27/10/2026", t: "Un lugar a la vez", p: "Índice único parcial sobre <code>(medicoId, fecha, hora)</code> entre activos: un profesional no tiene dos turnos a la misma hora, aunque sea en otro lugar." },
+    { tag: "Reglas 1 y 15", t: "Hospitales por obra social", p: "Se ve una institución si <code>origen = 'publico'</code> o si hay fila en <code>instituciones_coberturas</code> para la obra social del paciente, sin plan (todos) o con su plan." },
     { tag: "Regla 6", t: "Feedback de turnos cumplidos", p: "<code>feedbacks.turnoId</code> obligatorio y <code>UNIQUE</code>: un feedback por turno. El servicio exige que esté completado." },
     { tag: "Regla 7", t: "Órdenes y recetas con autor", p: "<code>ordenes.medicoId</code> y <code>recetas.medicoId</code> son obligatorios y sin cascada: siempre queda quién las emitió." },
     { tag: "Regla 8", t: "Resultados protegidos", p: "El PDF vive fuera de la carpeta pública; solo se descarga con token del paciente o del médico de la orden, y cada descarga va a <code>registro_auditoria</code>." },
     { tag: "Regla 11", t: "Login único por DNI", p: "<code>usuarios.dni</code> es <code>UNIQUE</code> y <code>usuarios.rol</code> decide el modo. El admin usa el DNI \"admin\"." },
     { tag: "Regla 13", t: "Registro contra el padrón", p: "<code>profesionales_padron</code> con <code>UNIQUE (dni, matricula, profesion)</code>; <code>medicos.padronId</code> guarda con qué ficha se verificó." },
+    { tag: "28/10/2026 · Regla 20", t: "DNI verificado en el registro", p: "<code>usuarios.tramiteHash</code> <code>UNIQUE</code>: HMAC del número de trámite del DNI escaneado (64 caracteres hexadecimales, trigger). Ni imagen ni contenido del código." },
+    { tag: "28/10/2026", t: "Especialidad por profesión", p: "<code>especialidades.profesion</code>: un kinesiólogo no puede elegir \"Cardiología\" al registrarse." },
+    { tag: "28/10/2026", t: "Feedback con criterios opcionales", p: "Solo <code>feedbacks.estrellas</code> es obligatoria; los criterios quedan <code>NULL</code> si no se califican (el trigger de 1 a 5 los deja pasar)." },
     { tag: "§11", t: "Contraseñas y tokens", p: "<code>passwordHash</code> con scrypt y <code>sesiones.tokenHash</code> con SHA-256: la base nunca guarda el valor original." },
   ];
 

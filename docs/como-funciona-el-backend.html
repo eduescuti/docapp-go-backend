@@ -1,0 +1,2067 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cómo funciona el backend</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Paleta del tema A de la app (modo claro, CLAUDE.md §7). */
+    :root {
+      --background: #FFFFFF;
+      --foreground: #0F172A;
+      --card: #FFFFFF;
+      --primary: #0284C7;
+      --primary-fg: #FFFFFF;
+      --muted: #F1F5F9;
+      --muted-fg: #64748B;
+      --border: #E2E8F0;
+      --accent: #E0F2FE;
+      --success: #22C55E;
+      --danger: #EF4444;
+      --warning: #D97706;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 1px 2px rgba(15, 23, 42, .04);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 0 16px 64px;
+    }
+
+    code {
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: .88em;
+      background: var(--muted);
+      padding: 1px 6px;
+      border-radius: 6px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .bajada {
+      color: var(--muted-fg);
+      margin: 0 0 20px;
+      max-width: 70ch;
+    }
+
+    section {
+      padding-top: 48px;
+    }
+
+    /* Encabezado */
+    .hero {
+      padding: 40px 0 8px;
+    }
+
+    .overline {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--primary);
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 40px);
+      margin: 8px 0 12px;
+    }
+
+    .hero p {
+      color: var(--muted-fg);
+      font-size: 17px;
+      max-width: 62ch;
+      margin: 0;
+    }
+
+    .indice {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .indice a {
+      text-decoration: none;
+      color: var(--primary);
+      background: var(--accent);
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      transition: transform .15s;
+    }
+
+    .indice a:hover {
+      transform: translateY(-1px);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    /* Recorrido de un pedido */
+    .escenarios {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .chip {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--foreground);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      min-height: 40px;
+      transition: background .2s, color .2s, border-color .2s;
+    }
+
+    .chip[aria-pressed="true"] {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-color: var(--primary);
+    }
+
+    .tubo {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      position: relative;
+    }
+
+    .paso {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 10px;
+      background: var(--card);
+      text-align: center;
+      transition: border-color .3s, background .3s, transform .3s, opacity .3s;
+      position: relative;
+    }
+
+    .paso .icono {
+      font-size: 22px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .paso b {
+      display: block;
+      font-size: 13px;
+    }
+
+    .paso small {
+      display: block;
+      color: var(--muted-fg);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .paso.activo {
+      border-color: var(--primary);
+      background: var(--accent);
+      transform: translateY(-4px);
+    }
+
+    .paso.hecho {
+      border-color: var(--success);
+    }
+
+    .paso.corte {
+      border-color: var(--danger);
+      background: #FEF2F2;
+    }
+
+    .paso.apagado {
+      opacity: .35;
+    }
+
+    .paso::after {
+      content: "";
+      position: absolute;
+      right: -9px;
+      top: 50%;
+      width: 10px;
+      height: 2px;
+      background: var(--border);
+    }
+
+    .paso:last-child::after {
+      display: none;
+    }
+
+    .pelota {
+      position: absolute;
+      top: -10px;
+      left: 0;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 0 6px rgba(2, 132, 199, .18);
+      transition: left .55s cubic-bezier(.4, 0, .2, 1), background .3s;
+      pointer-events: none;
+    }
+
+    .pelota.vuelve {
+      background: var(--success);
+      box-shadow: 0 0 0 6px rgba(34, 197, 94, .18);
+    }
+
+    .pelota.error {
+      background: var(--danger);
+      box-shadow: 0 0 0 6px rgba(239, 68, 68, .18);
+    }
+
+    .relato {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .relato h3 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .relato p {
+      margin: 0;
+      color: var(--muted-fg);
+      font-size: 14px;
+    }
+
+    pre {
+      margin: 0;
+      background: #0F172A;
+      color: #E2E8F0;
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-size: 12.5px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 120px;
+    }
+
+    .estado {
+      display: inline-block;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .ok {
+      background: #DCFCE7;
+      color: #166534;
+    }
+
+    .mal {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .controles {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .boton {
+      font: inherit;
+      font-weight: 600;
+      font-size: 14px;
+      border-radius: var(--radius-md);
+      padding: 10px 16px;
+      min-height: 44px;
+      cursor: pointer;
+      border: 1px solid var(--primary);
+      background: var(--primary);
+      color: var(--primary-fg);
+    }
+
+    .boton.secundario {
+      background: var(--card);
+      color: var(--primary);
+    }
+
+    /* Capas */
+    .capas {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .capa {
+      border-left: 4px solid var(--primary);
+    }
+
+    .capa h3 {
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .capa p {
+      margin: 0 0 8px;
+      color: var(--muted-fg);
+      font-size: 14px;
+    }
+
+    .capa ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13px;
+      color: var(--foreground);
+    }
+
+    .capa:nth-child(2) {
+      border-left-color: #0D9488;
+    }
+
+    .capa:nth-child(3) {
+      border-left-color: var(--warning);
+    }
+
+    .capa:nth-child(4) {
+      border-left-color: #9333EA;
+    }
+
+    .aparece {
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity .5s, transform .5s;
+    }
+
+    .aparece.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* Errores */
+    .tabla {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .tabla th,
+    .tabla td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .tabla th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted-fg);
+    }
+
+    .tabla tr {
+      transition: background .2s;
+    }
+
+    .tabla tbody tr:hover {
+      background: var(--muted);
+    }
+
+    .codigo-http {
+      font-weight: 700;
+      font-family: ui-monospace, Menlo, monospace;
+    }
+
+    .dos-columnas {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Seguridad */
+    .seguridad {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+
+    .seguridad .card h3 {
+      font-size: 15px;
+      margin: 8px 0 4px;
+    }
+
+    .seguridad .card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted-fg);
+    }
+
+    .emoji {
+      font-size: 22px;
+    }
+
+    .token {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+
+    .token span {
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: var(--muted);
+    }
+
+    .token .flecha {
+      background: none;
+      color: var(--muted-fg);
+    }
+
+    .hash {
+      animation: parpadeo 2.4s infinite;
+    }
+
+    @keyframes parpadeo {
+      50% {
+        background: var(--accent);
+      }
+    }
+
+    /* Sesión */
+    .analogia {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: var(--accent);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .analogia .grande {
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .analogia p {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .vida {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+    }
+
+    .vida-lista {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .vida-lista button {
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted-fg);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      min-height: 44px;
+      cursor: pointer;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      transition: all .25s;
+    }
+
+    .vida-lista button[aria-current="step"] {
+      color: var(--primary);
+      border-color: var(--primary);
+      background: var(--accent);
+    }
+
+    .vida-lista button.visto {
+      color: var(--foreground);
+    }
+
+    .vida-detalle {
+      min-height: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .vida-detalle h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .vida-detalle p {
+      margin: 0 0 10px;
+      font-size: 14.5px;
+    }
+
+    .vida-detalle .escena {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: var(--muted);
+      border-radius: var(--radius-md);
+      padding: 16px 12px;
+      margin: 6px 0 12px;
+      min-height: 92px;
+    }
+
+    .actor {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 8px 10px;
+      font-size: 13px;
+      text-align: center;
+      min-width: 92px;
+    }
+
+    .actor .icono {
+      font-size: 22px;
+      display: block;
+    }
+
+    .viaja {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-radius: 999px;
+      padding: 4px 10px;
+      animation: viajar 1.6s ease-in-out infinite alternate;
+    }
+
+    .viaja.verde {
+      background: var(--success);
+    }
+
+    .viaja.rojo {
+      background: var(--danger);
+    }
+
+    @keyframes viajar {
+      from {
+        transform: translateX(-10px);
+      }
+
+      to {
+        transform: translateX(10px);
+      }
+    }
+
+    .vida-detalle .pie {
+      margin-top: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .dato-clave {
+      display: inline-block;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px 8px;
+      font-size: 13px;
+      font-weight: 600;
+      margin: 2px 4px 2px 0;
+    }
+
+    .fila-db {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      background: #0F172A;
+      color: #E2E8F0;
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .simulador .control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 6px 0 14px;
+    }
+
+    .simulador input[type=range] {
+      flex: 1;
+      min-width: 200px;
+      accent-color: var(--primary);
+      height: 32px;
+    }
+
+    .barra-vida {
+      position: relative;
+      height: 18px;
+      background: var(--muted);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .barra-vida .lleno {
+      position: absolute;
+      inset: 0 auto 0 0;
+      background: var(--success);
+      border-radius: 999px;
+      transition: width .4s, background .4s;
+    }
+
+    .marcas {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted-fg);
+      margin-top: 6px;
+    }
+
+    .veredicto {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      font-size: 14.5px;
+      transition: background .3s, color .3s;
+    }
+
+    .veredicto.vivo {
+      background: #DCFCE7;
+      color: #166534;
+    }
+
+    .veredicto.alerta {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .veredicto.muerto {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .renovado {
+      animation: latido .6s;
+    }
+
+    @keyframes latido {
+      40% {
+        transform: scale(1.03);
+      }
+    }
+
+    /* Rutas de la API */
+    .metodo {
+      display: inline-block;
+      min-width: 62px;
+      text-align: center;
+      font: 700 11.5px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+      letter-spacing: .3px;
+      padding: 6px 7px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    .m-GET {
+      background: #E0F2FE;
+      color: #075985;
+    }
+
+    .m-POST {
+      background: #DCFCE7;
+      color: #166534;
+    }
+
+    .m-PUT {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .m-PATCH {
+      background: #EDE9FE;
+      color: #5B21B6;
+    }
+
+    .m-DELETE {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .anatomia {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 6px;
+      font: 600 15px/1.2 ui-monospace, "SFMono-Regular", Menlo, monospace;
+    }
+
+    .anatomia .parte {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: default;
+    }
+
+    .anatomia .trozo {
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px dashed var(--border);
+      transition: border-color .2s, background .2s;
+    }
+
+    .anatomia .parte:hover .trozo,
+    .anatomia .parte:focus .trozo {
+      border-color: var(--primary);
+      background: var(--accent);
+    }
+
+    .anatomia small {
+      font: 500 12px/1.35 Inter, system-ui, sans-serif;
+      color: var(--muted-fg);
+      max-width: 150px;
+    }
+
+    .verbos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted-fg);
+    }
+
+    .verbos span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .rutas-filtros {
+      display: grid;
+      gap: 12px;
+      margin: 16px 0 12px;
+    }
+
+    .rutas-filtros input[type=search] {
+      font: inherit;
+      font-size: 15px;
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--muted);
+      color: var(--foreground);
+    }
+
+    .rutas-filtros input[type=search]:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
+      background: var(--card);
+    }
+
+    .rutas-filtros .etiqueta {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted-fg);
+      margin-bottom: 6px;
+    }
+
+    .rutas-filtros .escenarios {
+      margin: 0;
+    }
+
+    .rutas-cuenta {
+      font-size: 14px;
+      color: var(--muted-fg);
+      margin: 0 0 10px;
+    }
+
+    .grupo-rutas {
+      margin-bottom: 18px;
+    }
+
+    .grupo-rutas header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 4px 12px;
+      margin: 0 0 8px;
+    }
+
+    .grupo-rutas h3 {
+      font-size: 16px;
+    }
+
+    .grupo-rutas header code {
+      font-size: 12px;
+      color: var(--muted-fg);
+    }
+
+    .ruta {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--card);
+      margin-bottom: 6px;
+      animation: entrar .35s both;
+      transition: border-color .2s;
+    }
+
+    @keyframes entrar {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+    }
+
+    .ruta[open] {
+      border-color: var(--primary);
+      box-shadow: var(--shadow);
+    }
+
+    .ruta summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      min-height: 44px;
+      cursor: pointer;
+    }
+
+    .ruta summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .ruta .camino {
+      font: 600 13.5px/1.3 ui-monospace, "SFMono-Regular", Menlo, monospace;
+      overflow-wrap: anywhere;
+      flex: 1;
+    }
+
+    .ruta .camino .param {
+      color: var(--primary);
+    }
+
+    .ruta .camino .query {
+      color: var(--muted-fg);
+      font-weight: 500;
+    }
+
+    .ruta .quien {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .ruta .quien span {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--muted);
+      color: var(--muted-fg);
+      white-space: nowrap;
+    }
+
+    .ruta .mas {
+      color: var(--muted-fg);
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+
+    .ruta[open] .mas {
+      transform: rotate(45deg);
+      color: var(--primary);
+    }
+
+    .ruta .detalle {
+      padding: 0 12px 12px;
+      font-size: 14px;
+      animation: aparecer .3s;
+    }
+
+    .ruta .detalle p {
+      margin: 0 0 8px;
+    }
+
+    .ruta .detalle dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 6px 12px;
+      margin: 0;
+      font-size: 13.5px;
+    }
+
+    .ruta .detalle dt {
+      color: var(--muted-fg);
+      font-weight: 600;
+    }
+
+    .ruta .detalle dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .sin-rutas {
+      text-align: center;
+      color: var(--muted-fg);
+      padding: 24px;
+    }
+
+    @media (max-width: 560px) {
+      .ruta summary {
+        flex-wrap: wrap;
+      }
+
+      .ruta .quien {
+        order: 3;
+        width: 100%;
+        padding-left: 72px;
+      }
+    }
+
+    @keyframes aparecer {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+    }
+
+    .por-que {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .por-que .card h3 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .por-que .card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted-fg);
+    }
+
+    /* Ciclo del turno */
+    .ciclo {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .estado-turno {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 13px;
+      border: 2px solid var(--border);
+      transition: border-color .3s, background .3s, transform .3s;
+    }
+
+    .estado-turno.encendido {
+      border-color: var(--primary);
+      background: var(--accent);
+      transform: scale(1.06);
+    }
+
+    .ciclo .fl {
+      color: var(--muted-fg);
+    }
+
+    .reglas {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .regla {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 14px;
+    }
+
+    .regla .n {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 12px;
+      display: grid;
+      place-items: center;
+    }
+
+    /* Base */
+    .tablas {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+
+    .grupo h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .grupo .t {
+      display: inline-block;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      background: var(--muted);
+      border-radius: 6px;
+      padding: 3px 7px;
+      margin: 0 4px 6px 0;
+    }
+
+    .numeros {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .numero {
+      text-align: center;
+    }
+
+    .numero b {
+      display: block;
+      font-size: 26px;
+      color: var(--primary);
+    }
+
+    .numero span {
+      font-size: 13px;
+      color: var(--muted-fg);
+    }
+
+    .terminal {
+      background: #0F172A;
+      color: #E2E8F0;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 13px;
+      overflow-x: auto;
+    }
+
+    .terminal .c {
+      color: #64748B;
+    }
+
+    footer {
+      margin-top: 48px;
+      color: var(--muted-fg);
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      .tubo {
+        grid-template-columns: 1fr;
+      }
+
+      .paso {
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .paso .icono {
+        margin: 0;
+      }
+
+      .paso::after {
+        display: none;
+      }
+
+      .pelota {
+        display: none;
+      }
+
+      .relato,
+      .dos-columnas,
+      .vida,
+      .por-que {
+        grid-template-columns: 1fr;
+      }
+
+      .vida-lista {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .vida-lista button {
+        white-space: nowrap;
+        width: auto;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      .pelota {
+        transition: none !important;
+        animation: none !important;
+      }
+
+      .aparece {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <header class="hero">
+      <span class="overline">DocApp Go · Sprint 2</span>
+      <h1>Cómo funciona el backend</h1>
+      <p>La app del celular no guarda los datos: le pide todo a un servidor (la <b>API</b>) por internet. El servidor
+        revisa
+        quién pide, aplica las reglas de negocio y lee o escribe la base de datos. Acá está, paso a paso y en simple.
+      </p>
+      <nav class="indice" aria-label="Secciones">
+        <a href="#recorrido">El viaje de un pedido</a>
+        <a href="#capas">Las capas</a>
+        <a href="#errores">Errores</a>
+        <a href="#seguridad">Seguridad</a>
+        <a href="#sesion">La sesión (token)</a>
+        <a href="#rutas">Las rutas</a>
+        <a href="#reglas">Reglas</a>
+        <a href="#base">La base</a>
+        <a href="#levantar">Cómo levantarlo</a>
+      </nav>
+    </header>
+
+    <section id="recorrido">
+      <h2>El viaje de un pedido</h2>
+      <p class="bajada">Elegí qué pasa y tocá <b>Reproducir</b>: el punto recorre cada pieza del servidor. Si algo
+        falla, el
+        pedido se corta ahí y vuelve un error con la forma <code>{ error }</code>, que la app muestra tal cual.</p>
+
+      <div class="escenarios" role="group" aria-label="Qué pasa con el pedido">
+        <button class="chip" data-escenario="ok" aria-pressed="true">✅ Reservar un turno</button>
+        <button class="chip" data-escenario="sinSesion" aria-pressed="false">🔒 Sin sesión</button>
+        <button class="chip" data-escenario="rol" aria-pressed="false">⛔ Rol equivocado</button>
+        <button class="chip" data-escenario="invalido" aria-pressed="false">✏️ Datos inválidos</button>
+        <button class="chip" data-escenario="ocupado" aria-pressed="false">⏰ Horario ya tomado</button>
+        <button class="chip" data-escenario="sinRed" aria-pressed="false">📡 Sin conexión</button>
+      </div>
+
+      <div class="card">
+        <div class="tubo" id="tubo">
+          <div class="pelota" id="pelota" aria-hidden="true"></div>
+          <div class="paso" data-paso="0"><span class="icono">📱</span>
+            <div><b>App</b><small>services → api()</small></div>
+          </div>
+          <div class="paso" data-paso="1"><span class="icono">🌐</span>
+            <div><b>Express</b><small>cors · json</small></div>
+          </div>
+          <div class="paso" data-paso="2"><span class="icono">🔑</span>
+            <div><b>autenticar</b><small>¿token válido?</small></div>
+          </div>
+          <div class="paso" data-paso="3"><span class="icono">🎫</span>
+            <div><b>requerirRol</b><small>¿le toca?</small></div>
+          </div>
+          <div class="paso" data-paso="4"><span class="icono">🧭</span>
+            <div><b>Ruta</b><small>valida el body</small></div>
+          </div>
+          <div class="paso" data-paso="5"><span class="icono">⚙️</span>
+            <div><b>Servicio</b><small>reglas de negocio</small></div>
+          </div>
+          <div class="paso" data-paso="6"><span class="icono">🗄️</span>
+            <div><b>Prisma + SQLite</b><small>la base</small></div>
+          </div>
+        </div>
+
+        <div class="relato">
+          <div>
+            <h3 id="relatoTitulo">Listo para empezar</h3>
+            <p id="relatoTexto">Tocá Reproducir para ver el recorrido.</p>
+            <div class="controles">
+              <button class="boton" id="reproducir">▶ Reproducir</button>
+              <button class="boton secundario" id="paso">Paso a paso</button>
+            </div>
+          </div>
+          <pre id="consola" aria-live="polite">// Acá aparece lo que viaja</pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="capas">
+      <h2>Las capas</h2>
+      <p class="bajada">El código está en <code>backend/src/</code>, ordenado como la práctica de la cátedra
+        (Express + Prisma). Cada capa hace una sola cosa.</p>
+      <div class="capas">
+        <div class="card capa aparece">
+          <h3>🧭 Rutas · <code>rutas/</code></h3>
+          <p>Reciben el pedido HTTP, leen y validan el body y la URL, y llaman al servicio. No tienen reglas de negocio.
+          </p>
+          <ul>
+            <li><code>auth.ts</code> login y registro</li>
+            <li><code>turnos.ts</code> reservar, cancelar</li>
+            <li><code>medicos.ts</code>, <code>admin.ts</code>…</li>
+          </ul>
+        </div>
+        <div class="card capa aparece">
+          <h3>⚙️ Servicios · <code>servicios/</code></h3>
+          <p>El corazón: las reglas (cobertura, 24 h, franjas, quién ve qué). Usan transacciones cuando hay que cambiar
+            varias cosas juntas.</p>
+          <ul>
+            <li><code>turnos.ts</code> disponibilidad y estados</li>
+            <li><code>cobertura.ts</code> reglas 1, 15 y 18</li>
+            <li><code>identidad.ts</code> DNI escaneado</li>
+          </ul>
+        </div>
+        <div class="card capa aparece">
+          <h3>🛡️ Middlewares · <code>middlewares/</code></h3>
+          <p>Filtros por los que pasa cada pedido antes (o después) de la ruta.</p>
+          <ul>
+            <li><code>autenticar</code> token → usuario</li>
+            <li><code>requerirRol</code> paciente / doctor / admin</li>
+            <li><code>limiteLogin</code> frena a quien adivina</li>
+            <li><code>manejarErrores</code> todo error → <code>{ error }</code></li>
+          </ul>
+        </div>
+        <div class="card capa aparece">
+          <h3>🗄️ Base · <code>prisma/</code></h3>
+          <p>El esquema (<code>schema.prisma</code>), las migraciones con triggers e índices extra, y el seed con los
+            datos de prueba.</p>
+          <ul>
+            <li><code>migrations/</code> historial de cambios</li>
+            <li><code>datos/demo.json</code> datos del seed</li>
+            <li><code>dev.db</code> el archivo SQLite</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="errores">
+      <h2>¿Qué pasa cuando algo sale mal?</h2>
+      <p class="bajada">Sí, se evalúan los errores en las dos puntas. El servidor nunca devuelve un error "crudo":
+        siempre un
+        código HTTP y un mensaje en castellano. La app lo convierte en <code>ErrorApi</code> y lo muestra en pantalla.
+      </p>
+      <div class="dos-columnas">
+        <div class="card">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Cuándo</th>
+                <th>Ejemplo de mensaje</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="codigo-http" style="color:var(--warning)">400</td>
+                <td>Datos que no cumplen</td>
+                <td>“Calificá la consulta, de 1 a 5 estrellas.”</td>
+              </tr>
+              <tr>
+                <td class="codigo-http" style="color:var(--warning)">401</td>
+                <td>Sin sesión o vencida</td>
+                <td>“Tu sesión venció. Iniciá sesión de nuevo.”</td>
+              </tr>
+              <tr>
+                <td class="codigo-http" style="color:var(--warning)">403</td>
+                <td>El rol no corresponde</td>
+                <td>“No tenés permiso para esto.”</td>
+              </tr>
+              <tr>
+                <td class="codigo-http" style="color:var(--warning)">404</td>
+                <td>No existe (o no es tuyo)</td>
+                <td>“No existe ese turno.”</td>
+              </tr>
+              <tr>
+                <td class="codigo-http" style="color:var(--warning)">409</td>
+                <td>Choca con algo que ya está</td>
+                <td>“Ese horario ya no está disponible.”</td>
+              </tr>
+              <tr>
+                <td class="codigo-http" style="color:var(--warning)">429</td>
+                <td>Demasiados intentos</td>
+                <td>“Demasiados intentos. Probá de nuevo en unos minutos.”</td>
+              </tr>
+              <tr>
+                <td class="codigo-http" style="color:var(--danger)">500</td>
+                <td>Algo inesperado</td>
+                <td>“Ocurrió un error inesperado…” (el detalle queda en la consola del servidor, no viaja)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:8px">En la app: <code>services/apiClient.ts</code></h3>
+          <p style="margin:0 0 10px;color:var(--muted-fg);font-size:14px">Todos los pedidos salen de una sola función,
+            <code>api()</code>. Ahí se manejan los casos generales para que ninguna pantalla los repita:
+          </p>
+          <div class="reglas" style="margin-top:0">
+            <div class="regla"><span class="n">1</span><span><b>Sin internet</b> o servidor apagado → “No pudimos
+                conectarnos con el servidor.”</span></div>
+            <div class="regla"><span class="n">2</span><span><b>401 con sesión</b> → borra el token y vuelve al
+                login.</span></div>
+            <div class="regla"><span class="n">3</span><span><b>Cualquier otro error</b> →
+                <code>ErrorApi(status, mensaje)</code>; la pantalla muestra el mensaje.</span></div>
+            <div class="regla"><span class="n">4</span><span><b>Doble control</b>: la app valida al escribir (más
+                cómodo), el servidor valida siempre (más seguro).</span></div>
+          </div>
+          <p style="margin:12px 0 0;color:var(--muted-fg);font-size:13px">Y la base es la última red: índices únicos y
+            triggers frenan un dato inválido aunque un servicio se equivoque (por ejemplo, dos reservas en el mismo
+            segundo).</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="seguridad">
+      <h2>Seguridad</h2>
+      <p class="bajada">Es una app médica: lo sensible nunca se guarda tal cual.</p>
+      <div class="seguridad">
+        <div class="card aparece"><span class="emoji">🔐</span>
+          <h3>Contraseñas</h3>
+          <p>Se guardan con <b>scrypt</b> (un hash lento, con sal). Ni el servidor puede leerlas. Login con DNI +
+            contraseña y el mismo mensaje si falla cualquiera de los dos.</p>
+        </div>
+        <div class="card aparece"><span class="emoji">🎟️</span>
+          <h3>Sesión con token</h3>
+          <p>Al entrar, el servidor da un token al azar que el celular guarda cifrado (<code>expo-secure-store</code>).
+            En la base queda solo su hash. Vence a los <b>90 días sin uso</b>. <a href="#sesion">Cómo funciona, paso a
+              paso ↓</a></p>
+          <div class="token" aria-hidden="true"><span>📱 x7Fq…9aB</span><span class="flecha">→ SHA-256 →</span><span
+              class="hash">🗄️ 3e1c…a04f</span></div>
+        </div>
+        <div class="card aparece"><span class="emoji">🎫</span>
+          <h3>Roles</h3>
+          <p>Cada ruta dice quién puede usarla. Un profesional solo ve a sus pacientes con turno; los PDF, solo el
+            paciente dueño o el médico de la orden.</p>
+        </div>
+        <div class="card aparece"><span class="emoji">🪪</span>
+          <h3>DNI escaneado</h3>
+          <p>El registro lee el código del DNI. Se guarda la fecha y un <b>HMAC</b> del número de trámite: nunca la foto
+            ni el código. Un DNI no abre dos cuentas.</p>
+        </div>
+        <div class="card aparece"><span class="emoji">🚦</span>
+          <h3>Límite de intentos</h3>
+          <p>5 fallos de login del mismo DNI (o 20 de la misma IP) en 15 minutos → espera.</p>
+        </div>
+        <div class="card aparece"><span class="emoji">📝</span>
+          <h3>Auditoría</h3>
+          <p>Login, registro, cambios de contraseña, descargas de resultados y otras acciones importantes quedan en
+            <code>registro_auditoria</code>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="sesion">
+      <h2>La sesión, paso a paso</h2>
+      <p class="bajada">Cómo sabe el servidor que sos vos en cada pedido sin pedirte la contraseña cada vez, y cuándo te
+        la vuelve a pedir.</p>
+
+      <div class="analogia">
+        <span class="grande" aria-hidden="true">🎟️</span>
+        <p><b>Es como la pulsera de un recital.</b> En la entrada mostrás tu DNI y tu entrada (DNI + contraseña) y te
+          ponen
+          una pulsera (el <b>token</b>). Adentro ya no mostrás el DNI: mostrás la pulsera. Si no la usás por mucho
+          tiempo, deja
+          de valer; y si te vas (cerrar sesión), te la cortan.</p>
+      </div>
+
+      <div class="card vida">
+        <ol class="vida-lista" id="vidaLista" aria-label="Momentos de la sesión"></ol>
+        <div class="vida-detalle" aria-live="polite">
+          <h3 id="vidaTitulo"></h3>
+          <div class="escena" id="vidaEscena"></div>
+          <div id="vidaTexto"></div>
+          <div class="pie">
+            <button class="boton secundario" id="vidaAnterior">← Anterior</button>
+            <button class="boton" id="vidaSiguiente">Siguiente →</button>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:17px;margin:32px 0 6px">¿Cuándo vence? Probalo</h3>
+      <p class="bajada" style="margin-bottom:12px">No vence a los 90 días de haber entrado, sino a los <b>90 días sin
+          usar la app</b>. Cada vez que la usás,
+        el reloj vuelve a cero. Mové la barra para simular cuántos días pasaron desde la última vez que la abriste.</p>
+      <div class="card simulador">
+        <div class="control">
+          <label for="dias"><b>Días sin abrir la app:</b> <span id="diasValor">0</span></label>
+          <input type="range" id="dias" min="0" max="120" value="0">
+          <button class="boton" id="usarApp">📱 Abrir la app hoy</button>
+        </div>
+        <div class="barra-vida" aria-hidden="true">
+          <div class="lleno" id="barraVida"></div>
+        </div>
+        <div class="marcas"><span>Último uso</span><span>45 días</span><span>90 días (vence)</span></div>
+        <div class="veredicto vivo" id="veredicto" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="rutas">
+      <h2>Todas las rutas de la API</h2>
+      <p class="bajada">Una <b>ruta</b> es una “puerta” del servidor: la app golpea una con un pedido y el servidor
+        responde. El backend tiene <b data-contar="70" class="cuenta-rutas">0</b> puertas, cada una con su archivo en
+        <code>src/rutas/</code>. Tocá una para ver qué hace, quién la puede usar, qué le mandás y qué te devuelve.</p>
+
+      <div class="card">
+        <h3 style="font-size:15px;margin:0 0 12px">¿Cómo se lee una ruta?</h3>
+        <div class="anatomia">
+          <span class="parte" tabindex="0"><span class="trozo"><span class="metodo m-PATCH">PATCH</span></span><small>El
+              <b>verbo</b>: qué querés hacer.</small></span>
+          <span class="parte" tabindex="0"><span class="trozo">/api</span><small>Todo lo del backend empieza
+              así.</small></span>
+          <span class="parte" tabindex="0"><span class="trozo">/turnos</span><small>El <b>recurso</b>: de qué
+              cosa hablás.</small></span>
+          <span class="parte" tabindex="0"><span class="trozo" style="color:var(--primary)">/:id</span><small>Un
+              <b>parámetro</b>: cuál de todos (el id va en la URL).</small></span>
+        </div>
+        <div class="verbos">
+          <span><span class="metodo m-GET">GET</span> leer</span>
+          <span><span class="metodo m-POST">POST</span> crear o hacer algo</span>
+          <span><span class="metodo m-PUT">PUT</span> reemplazar una lista entera</span>
+          <span><span class="metodo m-PATCH">PATCH</span> cambiar una parte</span>
+          <span><span class="metodo m-DELETE">DELETE</span> sacar</span>
+        </div>
+        <p style="margin:14px 0 0;font-size:14px;color:var(--muted-fg)">Lo que va después de <code>?</code> son
+          filtros opcionales (<code>?fecha=2026-11-02</code>). <code>/yo</code> significa “el usuario del token”: el
+          servidor nunca confía en un id de usuario que venga en la URL. Si pedís una ruta que no existe, responde
+          <b>404</b> <code>{ error: "No existe esa ruta." }</code>.</p>
+      </div>
+
+      <div class="card rutas-filtros">
+        <input type="search" id="rutaBuscar" placeholder="Buscar: turno, receta, foto, favoritos…"
+          aria-label="Buscar una ruta">
+        <div>
+          <div class="etiqueta" id="etiquetaQuien">¿Quién la usa?</div>
+          <div class="escenarios" id="rutaQuien" role="group" aria-labelledby="etiquetaQuien"></div>
+        </div>
+        <div>
+          <div class="etiqueta" id="etiquetaVerbo">Verbo</div>
+          <div class="escenarios" id="rutaVerbo" role="group" aria-labelledby="etiquetaVerbo"></div>
+        </div>
+      </div>
+      <p class="rutas-cuenta" id="rutaCuenta" aria-live="polite"></p>
+      <div id="rutaLista"></div>
+    </section>
+
+    <section id="reglas">
+      <h2>Las reglas viven en el servidor</h2>
+      <p class="bajada">La app las muestra, pero quien las hace cumplir es el backend. Por ejemplo, la vida de un turno
+        (tocá un estado):</p>
+      <div class="card">
+        <div class="ciclo" id="ciclo">
+          <button class="estado-turno chip" data-estado="pendiente">⏳ Pendiente</button><span class="fl">→</span>
+          <button class="estado-turno chip" data-estado="confirmado">✅ Confirmado</button><span class="fl">→</span>
+          <button class="estado-turno chip" data-estado="completado">🏁 Completado</button>
+          <span class="fl" style="margin-left:8px">·</span>
+          <button class="estado-turno chip" data-estado="rechazado">✖ Rechazado</button>
+          <button class="estado-turno chip" data-estado="cancelado">🚫 Cancelado</button>
+        </div>
+        <p id="cicloTexto" style="margin:12px 0 0;color:var(--muted-fg);font-size:14px">Todo turno nace pendiente.</p>
+      </div>
+      <div class="reglas">
+        <div class="regla"><span class="n">1</span><span>Solo turnos <b>de tu cobertura</b>: hospitales públicos
+            siempre, privados si aceptan tu plan.</span></div>
+        <div class="regla"><span class="n">4</span><span><b>Sin doble reserva</b>: un horario tomado no se puede volver
+            a tomar.</span></div>
+        <div class="regla"><span class="n">5</span><span>Cancelar o reprogramar hasta <b>24 h antes</b>.</span></div>
+        <div class="regla"><span class="n">6</span><span>Feedback solo de un turno <b>cumplido</b>, una vez.</span>
+        </div>
+        <div class="regla"><span class="n">⏱</span><span>Turnos de <b>30 min</b> dentro de las franjas que carga el
+            profesional.</span></div>
+        <div class="regla"><span class="n">🔔</span><span>Las <b>notificaciones</b> se crean en la misma transacción que
+            el cambio que las dispara.</span></div>
+      </div>
+    </section>
+
+    <section id="base">
+      <h2>La base de datos</h2>
+      <p class="bajada">Un archivo SQLite (<code>prisma/dev.db</code>) manejado con Prisma. Con
+        <code>npm run db:seed</code> se carga
+        todo esto de prueba (y se borra lo que había).
+      </p>
+      <div class="numeros">
+        <div class="card numero"><b data-contar="1077">0</b><span>establecimientos reales (REFES, CABA)</span></div>
+        <div class="card numero"><b data-contar="26">0</b><span>obras sociales</span></div>
+        <div class="card numero"><b data-contar="78">0</b><span>especialidades</span></div>
+        <div class="card numero"><b data-contar="17">0</b><span>cuentas de prueba</span></div>
+      </div>
+      <div class="tablas">
+        <div class="card grupo">
+          <h3>👤 Cuentas</h3><span class="t">usuarios</span><span class="t">pacientes</span><span
+            class="t">medicos</span><span class="t">sesiones</span><span class="t">registro_auditoria</span>
+        </div>
+        <div class="card grupo">
+          <h3>🏥 Lugares y coberturas</h3><span class="t">instituciones</span><span class="t">sedes</span><span
+            class="t">obras_sociales</span><span class="t">planes_medicos</span><span
+            class="t">instituciones_coberturas</span><span class="t">medicos_coberturas</span>
+        </div>
+        <div class="card grupo">
+          <h3>📅 Turnos</h3><span class="t">franjas_atencion</span><span class="t">turnos</span><span
+            class="t">feedbacks</span><span class="t">notificaciones</span>
+        </div>
+        <div class="card grupo">
+          <h3>🧪 Clínica</h3><span class="t">ordenes</span><span class="t">resultados</span><span
+            class="t">recetas</span><span class="t">notas_paciente</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="levantar">
+      <h2>Cómo levantarlo</h2>
+      <p class="bajada">Desde <code>DocApp Go (backend)/backend</code>. La app apunta a esta API con
+        <code>EXPO_PUBLIC_API_URL</code>
+        en su <code>.env</code> (en el celular, la IP de la computadora).
+      </p>
+      <div class="terminal">
+        <div><span class="c"># una sola vez: copiar .env.example a .env y completar SECRETO_IDENTIDAD</span></div>
+        <div>npm install</div>
+        <div>npm run db:migrate <span class="c"># crea las tablas</span></div>
+        <div>npm run db:seed &nbsp;&nbsp;<span class="c"># datos de prueba</span></div>
+        <div>npm run dev &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c"># http://localhost:3000</span></div>
+        <div>curl localhost:3000/api/health <span class="c"># { "ok": true }</span></div>
+      </div>
+    </section>
+
+    <footer>Detalle técnico completo en <code>docs/</code>: arquitectura (02), base de datos (03), API (04), sesiones
+      (05) y reglas (06).</footer>
+  </main>
+
+  <script>
+    // Escenarios del recorrido: hasta qué paso llega, qué cuenta cada paso y qué responde.
+    const PASOS = [
+      ["La app arma el pedido", "Turnos → Solicitar turno llama a crearTurno(), que usa api(): suma la URL del .env y el token guardado."],
+      ["Express lo recibe", "Revisa el origen (CORS, solo para web) y convierte el JSON del body en un objeto."],
+      ["¿Quién es?", "autenticar busca el hash del token en la tabla sesiones. Si existe y no venció, sabe qué usuario pide."],
+      ["¿Le toca?", "requerirRol(\"paciente\"): solo un paciente puede reservar."],
+      ["La ruta valida", "POST /api/turnos lee los 5 pasos de la reserva (fecha, hora, sedeId, especialidadId, medicoId) y revisa el formato."],
+      ["Las reglas", "El servicio revisa todo junto, en una transacción: cobertura, franja, especialidad del profesional, que no haya pasado y que esté libre."],
+      ["Se guarda", "Prisma inserta el turno (nace pendiente) y la notificación para el profesional. Los índices únicos de SQLite frenan una doble reserva."],
+    ];
+    const PEDIDO = 'POST /api/turnos\nAuthorization: Bearer x7Fq…9aB\n\n{ "fecha": "2026-11-02", "hora": "10:30",\n  "sedeId": "sede-…", "especialidadId": "esp-enfermeria",\n  "medicoId": "med-sosa" }';
+    const ESCENARIOS = {
+      ok: { hasta: 6, codigo: 201, respuesta: '{ "id": "2b0d…", "estado": "pendiente", … }', fin: "El turno quedó pendiente. La app muestra “Turno solicitado” y lo lista en Próximos." },
+      sinSesion: { hasta: 2, codigo: 401, respuesta: '{ "error": "Tu sesión venció. Iniciá sesión de nuevo." }', fin: "No hay token o venció. La app borra la sesión y vuelve al login.", pedido: 'POST /api/turnos\n(sin Authorization)' },
+      rol: { hasta: 3, codigo: 403, respuesta: '{ "error": "No tenés permiso para esto." }', fin: "Un profesional intentó reservar: la ruta es solo de pacientes." },
+      invalido: { hasta: 4, codigo: 400, respuesta: '{ "error": "Falta el campo \\"especialidadId\\"." }', fin: "Al pedido le falta un paso de la reserva. No llega a tocar la base.", pedido: 'POST /api/turnos\n\n{ "fecha": "2026-11-02", "hora": "10:30", "medicoId": "med-sosa" }' },
+      ocupado: { hasta: 5, codigo: 409, respuesta: '{ "error": "Ese horario ya no está disponible." }', fin: "Otro paciente lo tomó un segundo antes. La app avisa y refresca los horarios libres." },
+      sinRed: { hasta: 0, codigo: 0, respuesta: 'ErrorApi(0, "No pudimos conectarnos con el servidor.\nRevisá tu conexión e intentá de nuevo.")', fin: "El pedido ni salió del celular (sin internet, IP equivocada o servidor apagado). Lo detecta api() en la app." },
+    };
+
+    const pasos = [...document.querySelectorAll(".paso")];
+    const pelota = document.getElementById("pelota");
+    const consola = document.getElementById("consola");
+    const titulo = document.getElementById("relatoTitulo");
+    const texto = document.getElementById("relatoTexto");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let escenario = "ok";
+    let actual = -1;
+    let reloj = null;
+
+    function moverPelota(i) {
+      const caja = pasos[i].getBoundingClientRect();
+      const tubo = document.getElementById("tubo").getBoundingClientRect();
+      pelota.style.left = (caja.left - tubo.left + caja.width / 2 - 7) + "px";
+    }
+
+    function reiniciar() {
+      clearInterval(reloj);
+      actual = -1;
+      pasos.forEach((p) => p.classList.remove("activo", "hecho", "corte", "apagado"));
+      pelota.classList.remove("vuelve", "error");
+      moverPelota(0);
+      titulo.textContent = "Listo para empezar";
+      texto.textContent = "Tocá Reproducir para ver el recorrido.";
+      consola.textContent = "// Acá aparece lo que viaja";
+    }
+
+    function terminar() {
+      clearInterval(reloj);
+      const e = ESCENARIOS[escenario];
+      const ok = e.codigo >= 200 && e.codigo < 300;
+      if (!ok) pasos[e.hasta].classList.replace("activo", "corte");
+      pasos.forEach((p, i) => { if (i > e.hasta) p.classList.add("apagado"); });
+      pelota.classList.add(ok ? "vuelve" : "error");
+      setTimeout(() => moverPelota(0), reduce ? 0 : 450);
+      titulo.textContent = ok ? "Vuelve la respuesta" : (e.codigo ? "Se corta acá" : "No llegó al servidor");
+      texto.textContent = e.fin;
+      const estado = e.codigo ? `HTTP ${e.codigo}` : "sin respuesta";
+      consola.innerHTML = "";
+      const pedido = document.createTextNode((e.pedido ?? PEDIDO) + "\n\n← ");
+      const etiqueta = document.createElement("span");
+      etiqueta.className = "estado " + (ok ? "ok" : "mal");
+      etiqueta.textContent = estado;
+      consola.append(pedido, etiqueta, document.createTextNode("\n" + e.respuesta));
+    }
+
+    function avanzar() {
+      const e = ESCENARIOS[escenario];
+      if (actual >= e.hasta) { terminar(); return false; }
+      if (actual >= 0) pasos[actual].classList.replace("activo", "hecho");
+      actual++;
+      pasos[actual].classList.add("activo");
+      moverPelota(actual);
+      titulo.textContent = PASOS[actual][0];
+      texto.textContent = PASOS[actual][1];
+      consola.textContent = (e.pedido ?? PEDIDO) + "\n\n→ en camino…";
+      return true;
+    }
+
+    document.getElementById("reproducir").addEventListener("click", () => {
+      reiniciar();
+      avanzar();
+      reloj = setInterval(() => { if (!avanzar()) clearInterval(reloj); }, reduce ? 400 : 1100);
+    });
+    document.getElementById("paso").addEventListener("click", () => {
+      clearInterval(reloj);
+      const e = ESCENARIOS[escenario];
+      if (actual > e.hasta || pelota.classList.contains("vuelve") || pelota.classList.contains("error")) reiniciar();
+      avanzar();
+    });
+    document.querySelectorAll("[data-escenario]").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll("[data-escenario]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      escenario = b.dataset.escenario;
+      reiniciar();
+    }));
+    addEventListener("resize", () => moverPelota(Math.max(actual, 0)));
+    reiniciar();
+
+    // ───── La sesión: línea de vida del token ─────
+    const VIDA = [
+      {
+        corto: "1. Entrar", titulo: "1. Entrás con DNI y contraseña",
+        escena: '<div class="actor"><span class="icono">📱</span>App</div><span class="viaja">DNI + contraseña</span><div class="actor"><span class="icono">🖥️</span>Servidor</div>',
+        texto: '<p>La app manda <code>POST /api/auth/login</code>. El servidor busca tu usuario por DNI y compara la contraseña con el hash guardado (scrypt). Si no coincide, responde siempre “DNI o contraseña incorrectos” (no dice cuál de los dos falló) y suma un intento fallido: con 5 seguidos en 15 minutos te hace esperar.</p>'
+      },
+      {
+        corto: "2. Crear el token", titulo: "2. El servidor crea el token",
+        escena: '<div class="actor"><span class="icono">🎲</span>32 bytes al azar</div><span class="viaja">x7Fq…9aB</span><div class="actor"><span class="icono">#️⃣</span>SHA-256</div><span class="viaja verde">3e1c…a04f</span><div class="actor"><span class="icono">🗄️</span>sesiones</div>',
+        texto: '<p>Genera un número al azar de 32 bytes (el <b>token</b>, unos 43 caracteres) y guarda en la tabla <code>sesiones</code> <b>solo su hash</b>, con estos datos:</p><div class="fila-db">tokenHash   3e1c…a04f\nusuarioId   (tu cuenta)\ncreadaEn    hoy 10:00\nultimoUsoEn hoy 10:00\nexpiraEn    hoy + 90 días\nrevocadaEn  —\ndispositivo Android · Chrome…\nip          192.168.0.20</div><p style="margin-top:10px">El token en sí viaja una sola vez hacia tu celular, en la respuesta del login.</p>'
+      },
+      {
+        corto: "3. Guardarlo", titulo: "3. El celular lo guarda cifrado",
+        escena: '<div class="actor"><span class="icono">🖥️</span>Servidor</div><span class="viaja verde">{ token, sesion }</span><div class="actor"><span class="icono">🔐</span>Secure Store</div>',
+        texto: '<p>La app guarda el token con <code>expo-secure-store</code>: el sistema operativo lo cifra y ninguna otra app lo puede leer. La contraseña no se guarda en ningún lado.</p><p>En <b>web</b> el token queda solo en la memoria de la pestaña: si recargás, hay que entrar de nuevo (el navegador no tiene un lugar igual de seguro).</p>'
+      },
+      {
+        corto: "4. Cada pedido", titulo: "4. En cada pedido mostrás la “pulsera”",
+        escena: '<div class="actor"><span class="icono">📱</span>App</div><span class="viaja">Bearer x7Fq…9aB</span><div class="actor"><span class="icono">🔑</span>autenticar</div>',
+        texto: '<p>Cada pedido lleva el encabezado <code>Authorization: Bearer x7Fq…9aB</code>. El middleware <code>autenticar</code> calcula el hash, busca la fila en <code>sesiones</code> y revisa cuatro cosas:</p><p><span class="dato-clave">✔ existe</span><span class="dato-clave">✔ no fue revocada</span><span class="dato-clave">✔ no venció</span><span class="dato-clave">✔ la cuenta está activa</span></p><p>Si todo da bien, ya sabe quién sos y qué rol tenés. Si algo falla: <b>401</b>.</p>'
+      },
+      {
+        corto: "5. Se renueva", titulo: "5. Usarla la renueva",
+        escena: '<div class="actor"><span class="icono">⏱️</span>último uso</div><span class="viaja verde">+90 días</span><div class="actor"><span class="icono">📅</span>nuevo vencimiento</div>',
+        texto: '<p>Cada vez que usás la app, el servidor corre el vencimiento: <code>expiraEn = ahora + 90 días</code>. Por eso no vence mientras la uses (se llama <b>vencimiento por inactividad</b> o “ventana deslizante”).</p><p>Para no escribir en la base en cada pedido, lo actualiza como mucho <b>una vez por minuto</b>.</p>'
+      },
+      {
+        corto: "6. Volver a abrir", titulo: "6. Cerrás y volvés a abrir la app",
+        escena: '<div class="actor"><span class="icono">🔐</span>Secure Store</div><span class="viaja">GET /api/sesion</span><div class="actor"><span class="icono">🖥️</span>Servidor</div>',
+        texto: '<p>Al abrir, la app busca el token guardado y le pregunta al servidor si sigue valiendo (<code>GET /api/sesion</code>). Si sí, entrás directo al Inicio de tu rol, sin escribir nada.</p><p>Con la <b>huella</b> activada, primero te la pide el celular y recién después usa el token: la huella “desbloquea” la sesión guardada.</p>'
+      },
+      {
+        corto: "7. Termina", titulo: "7. Cómo termina una sesión",
+        escena: '<div class="actor"><span class="icono">🖥️</span>Servidor</div><span class="viaja rojo">401</span><div class="actor"><span class="icono">📱</span>App → login</div>',
+        texto: '<p>Una sesión deja de valer por cualquiera de estas razones:</p><p><span class="dato-clave">🚪 Cerrar sesión</span><span class="dato-clave">🔁 Cambiar la contraseña (corta las otras)</span><span class="dato-clave">⌛ 90 días sin uso</span><span class="dato-clave">⛔ Cuenta desactivada</span></p><p>En todos los casos el servidor responde <b>401</b>. La app, desde <code>api()</code>, borra el token del celular y te lleva al login. Las sesiones viejas se borran solas de la base a los 30 días.</p>'
+      },
+    ];
+    const vidaLista = document.getElementById("vidaLista");
+    let vidaActual = 0;
+    VIDA.forEach((v, i) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.textContent = v.corto;
+      b.addEventListener("click", () => mostrarVida(i));
+      li.append(b);
+      vidaLista.append(li);
+    });
+    function mostrarVida(i) {
+      vidaActual = i;
+      const v = VIDA[i];
+      document.getElementById("vidaTitulo").textContent = v.titulo;
+      document.getElementById("vidaEscena").innerHTML = v.escena;
+      document.getElementById("vidaTexto").innerHTML = v.texto;
+      vidaLista.querySelectorAll("button").forEach((b, j) => {
+        if (j === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+        b.classList.toggle("visto", j < i);
+      });
+      document.getElementById("vidaAnterior").disabled = i === 0;
+      document.getElementById("vidaSiguiente").textContent = i === VIDA.length - 1 ? "Volver a empezar ↺" : "Siguiente →";
+    }
+    document.getElementById("vidaAnterior").addEventListener("click", () => mostrarVida(Math.max(0, vidaActual - 1)));
+    document.getElementById("vidaSiguiente").addEventListener("click", () => mostrarVida(vidaActual === VIDA.length - 1 ? 0 : vidaActual + 1));
+    mostrarVida(0);
+
+    // ───── Simulador de vencimiento ─────
+    const DIAS_SESION = 90;
+    const rango = document.getElementById("dias");
+    const barra = document.getElementById("barraVida");
+    const veredicto = document.getElementById("veredicto");
+    function simular() {
+      const d = Number(rango.value);
+      document.getElementById("diasValor").textContent = d;
+      const restan = DIAS_SESION - d;
+      barra.style.width = Math.min(100, (d / DIAS_SESION) * 100) + "%";
+      barra.style.background = d >= DIAS_SESION ? "var(--danger)" : d > 75 ? "var(--warning)" : "var(--success)";
+      veredicto.className = "veredicto " + (d >= DIAS_SESION ? "muerto" : d > 75 ? "alerta" : "vivo");
+      veredicto.innerHTML = d >= DIAS_SESION
+        ? "⛔ <b>Sesión vencida.</b> Al abrir la app el servidor responde 401: la app borra el token y te pide DNI y contraseña."
+        : d === 0
+          ? "✅ <b>Recién usada.</b> El vencimiento quedó en 90 días a partir de hoy."
+          : `✅ <b>Sigue valiendo.</b> Si abrís la app hoy entrás directo, y el vencimiento vuelve a quedar en 90 días. Si no, vence en <b>${restan} ${restan === 1 ? "día" : "días"}</b>.`;
+    }
+    rango.addEventListener("input", simular);
+    document.getElementById("usarApp").addEventListener("click", () => {
+      if (Number(rango.value) >= DIAS_SESION) {
+        veredicto.className = "veredicto muerto";
+        veredicto.innerHTML = "⛔ Ya venció: abrir la app te lleva al login. Al entrar con tu contraseña se crea una sesión nueva (y la barra vuelve a cero).";
+        setTimeout(() => { rango.value = 0; simular(); }, reduce ? 0 : 1800);
+        return;
+      }
+      rango.value = 0;
+      simular();
+      veredicto.classList.remove("renovado"); void veredicto.offsetWidth; veredicto.classList.add("renovado");
+      veredicto.innerHTML = "🔄 <b>Renovada.</b> Usaste la app: el servidor corrió el vencimiento a 90 días desde hoy.";
+    });
+    simular();
+
+    // ───── Rutas de la API (src/rutas/*.ts, montadas en src/index.ts) ─────
+    // q: quién la puede usar. "publica" = sin token; "sesion" = cualquiera con sesión; si no, los roles.
+    const GRUPOS = [
+      {
+        titulo: "Encendido", archivo: "index.ts", rutas: [
+          ["GET", "/api/health", ["publica"], "Pregunta si el servidor está prendido y si llega a la base. Sirve para probar la conexión.", null, "{ ok: true }"],
+        ]
+      },
+      {
+        titulo: "Entrar y registrarse", archivo: "rutas/auth.ts", rutas: [
+          ["POST", "/api/auth/login", ["publica"], "Entrar con DNI y contraseña. Crea una sesión nueva. Con 5 intentos fallidos seguidos del mismo DNI en 15 minutos, se bloquea un rato.", "{ dni, password }", "{ token, expiraEn, sesion }"],
+          ["POST", "/api/auth/logout", ["sesion"], "Cerrar sesión: el servidor marca el token como revocado y deja de servir.", null, "204 (sin contenido)"],
+          ["PATCH", "/api/auth/contrasena", ["sesion"], "Cambiar la contraseña. Corta todas las otras sesiones de la cuenta.", "{ actual, nueva }", "204"],
+          ["POST", "/api/auth/registro/dni", ["publica"], "Lee el código del DNI escaneado con la cámara y avisa si ese DNI ya tiene cuenta. No guarda nada.", "{ codigo }", "{ dni, nombre, apellido }"],
+          ["POST", "/api/auth/registro/paciente", ["publica"], "Crea la cuenta del paciente y entra. DNI, nombre y apellido salen del código del DNI, no se escriben.", "{ codigoDni, password, planMedicoId }", "201 { token, expiraEn, sesion }"],
+          ["POST", "/api/auth/registro/profesional/verificar", ["publica"], "Busca al profesional en el padrón nacional (el paso “¿Esta es tu información?”).", "{ dni, matricula, profesion }", "La ficha del padrón"],
+          ["POST", "/api/auth/registro/profesional", ["publica"], "Crea la cuenta del profesional y entra. El DNI escaneado tiene que ser de la persona de la ficha.", "{ codigoDni, dni, matricula, profesion, password, genero, especialidadId }", "201 { token, expiraEn, sesion }"],
+        ]
+      },
+      {
+        titulo: "Sesión y catálogos", archivo: "rutas/catalogos.ts", rutas: [
+          ["GET", "/api/sesion", ["sesion"], "“¿Este token sigue valiendo?”. La app la usa al abrirse para entrar directo.", null, "La sesión: rol, nombre e ids"],
+          ["GET", "/api/planes", ["publica"], "Las obras sociales con sus planes. Las usa el registro y Mi perfil.", null, "[{ obra social, planes }]"],
+          ["GET", "/api/especialidades", ["publica"], "Las 78 especialidades, cada una con su profesión.", null, "[{ id, nombre, profesion, … }]"],
+          ["GET", "/api/profesiones", ["publica"], "Las profesiones del padrón (Médico, Enfermero, Kinesiólogo…).", null, "[profesiones]"],
+        ]
+      },
+      {
+        titulo: "El paciente", archivo: "rutas/pacientes.ts", rutas: [
+          ["GET", "/api/pacientes/yo", ["paciente"], "Tus datos, tu plan y tus favoritos.", null, "El paciente"],
+          ["PATCH", "/api/pacientes/yo", ["paciente"], "Cambiar de obra social o de plan. Cambia lo que ves en toda la app.", "{ planMedicoId }", "El paciente actualizado"],
+          ["GET", "/api/pacientes/yo/turnos", ["paciente"], "Tus próximos turnos y tu historial, con profesional, especialidad y lugar.", null, "{ proximos, historial }"],
+          ["GET", "/api/pacientes/yo/turnos/proximo", ["paciente"], "Tu próximo turno, para la tarjeta del Inicio.", null, "El turno o null"],
+          ["GET", "/api/pacientes/yo/turnos/todos", ["paciente"], "Todos tus turnos, también los que sacaste del historial.", null, "[turnos]"],
+          ["DELETE", "/api/pacientes/yo/turnos/historial", ["paciente"], "“Eliminar todo” del historial: los oculta de la lista, no los borra.", null, "204"],
+          ["GET", "/api/pacientes/yo/ordenes?archivadas=", ["paciente"], "Tus órdenes: las activas, las archivadas o todas.", null, "[órdenes]"],
+          ["GET", "/api/pacientes/yo/resultados?archivados=", ["paciente"], "Tus resultados de estudios.", null, "[resultados]"],
+          ["GET", "/api/pacientes/yo/recetas", ["paciente"], "Tus recetas separadas en activas, pasadas y archivadas.", null, "{ activas, pasadas, archivadas }"],
+          ["GET", "/api/pacientes/yo/recetas/todas", ["paciente"], "Todas tus recetas, archivadas o no.", null, "[recetas]"],
+          ["GET", "/api/pacientes/yo/feedback/pendientes", ["paciente"], "Los turnos cumplidos que todavía no calificaste.", null, "[turnos]"],
+          ["GET", "/api/pacientes/yo/feedback", ["paciente"], "Las calificaciones que ya dejaste.", null, "[calificaciones]"],
+          ["PUT", "/api/pacientes/yo/favoritos/medicos/:medicoId", ["paciente"], "Marcar un profesional como favorito.", null, "El paciente con sus favoritos"],
+          ["DELETE", "/api/pacientes/yo/favoritos/medicos/:medicoId", ["paciente"], "Sacar un profesional de favoritos.", null, "El paciente con sus favoritos"],
+          ["PUT", "/api/pacientes/yo/favoritos/instituciones/:institucionId", ["paciente"], "Marcar una institución como favorita (el corazón del mapa).", null, "El paciente con sus favoritos"],
+          ["DELETE", "/api/pacientes/yo/favoritos/instituciones/:institucionId", ["paciente"], "Sacar una institución de favoritas.", null, "El paciente con sus favoritos"],
+        ]
+      },
+      {
+        titulo: "Profesionales", archivo: "rutas/medicos.ts", rutas: [
+          ["GET", "/api/medicos?especialidad=&sede=&q=", ["sesion"], "Buscar profesionales. A un paciente solo le muestra los que atienden su cobertura.", null, "[profesionales]"],
+          ["GET", "/api/medicos/:id", ["sesion"], "El perfil público de un profesional.", null, "El profesional"],
+          ["GET", "/api/medicos/yo", ["doctor"], "Tu perfil de profesional.", null, "El profesional"],
+          ["PUT", "/api/medicos/yo/coberturas", ["doctor"], "Las coberturas que atendés. Reemplaza la lista entera.", "{ coberturas: [{ obraSocialId, planesIds? }] }", "El profesional actualizado"],
+          ["PUT", "/api/medicos/yo/lugares", ["doctor"], "Dónde atendés. Solo lugares públicos o que aceptan alguna de tus coberturas.", "{ sedeIds }", "El profesional actualizado"],
+          ["GET", "/api/medicos/yo/franjas", ["doctor"], "Tus horarios de atención (Mis horarios).", null, "[{ sedeId, diaSemana, desde, hasta }]"],
+          ["PUT", "/api/medicos/yo/franjas", ["doctor"], "Guardar tus horarios. Reemplaza todos.", "{ franjas: [{ sedeId, diaSemana, desde, hasta }] }", "[franjas]"],
+          ["GET", "/api/medicos/yo/agenda?desde=&hasta=", ["doctor"], "Tus turnos, con el paciente (y su foto), el lugar y la institución.", null, "[turnos]"],
+          ["GET", "/api/medicos/yo/pacientes", ["doctor"], "Tus pacientes asignados: los que tienen un turno próximo con vos.", null, "[pacientes]"],
+          ["GET", "/api/medicos/yo/pacientes/:pacienteId/ordenes", ["doctor"], "Ficha del paciente: las órdenes que le diste. Si no es tu paciente, 404.", null, "[órdenes]"],
+          ["GET", "/api/medicos/yo/pacientes/:pacienteId/recetas", ["doctor"], "Ficha del paciente: las recetas que le diste.", null, "[recetas]"],
+          ["GET", "/api/medicos/yo/pacientes/:pacienteId/notas", ["doctor"], "Tus notas privadas sobre ese paciente. Nadie más las ve.", null, "[notas]"],
+          ["POST", "/api/medicos/yo/pacientes/:pacienteId/notas", ["doctor"], "Escribir una nota privada sobre ese paciente.", "{ texto }", "201 la nota"],
+        ]
+      },
+      {
+        titulo: "Turnos", archivo: "rutas/turnos.ts", rutas: [
+          ["GET", "/api/turnos/dias-con-turnos?desde=&hasta=&medicos=", ["paciente"], "Qué días tienen algún horario libre para vos.", null, "[\"2026-11-02\", …]"],
+          ["GET", "/api/turnos/disponibles?fecha=&medicos=", ["paciente"], "Los horarios libres de un día, solo en lugares y con profesionales de tu cobertura.", null, "[{ medicoId, sedeId, hora }]"],
+          ["POST", "/api/turnos", ["paciente"], "Pedir un turno: los 5 pasos de la reserva. El servidor revisa la combinación entera y el turno nace pendiente.", "{ fecha, hora, sedeId, especialidadId, medicoId }", "201 el turno"],
+          ["POST", "/api/turnos/:id/reprogramar", ["paciente"], "Cancela el turno y reserva otro con el mismo profesional, en una sola operación. Hasta 24 h antes.", "{ sedeId, fecha, hora }", "201 el turno nuevo"],
+          ["POST", "/api/turnos/:id/feedback", ["paciente"], "Calificar un turno cumplido. Solo las estrellas son obligatorias; cada criterio que mandes va de 1 a 5.", "{ estrellas, criterios?, comentario? }", "201 la calificación"],
+          ["PATCH", "/api/turnos/:id", ["paciente", "doctor"], "Depende de quién la usa: el paciente lo cancela (hasta 24 h antes) o lo saca del historial; el profesional lo confirma o lo rechaza.", "{ estado } o { ocultoEnHistorial: true }", "El turno actualizado"],
+        ]
+      },
+      {
+        titulo: "Órdenes, resultados y recetas", archivo: "rutas/estudios.ts", rutas: [
+          ["POST", "/api/ordenes", ["doctor"], "Asignarle una orden a un paciente, en uno de tus lugares.", "{ pacienteId, institucionId, estudiosSolicitados, indicaciones }", "201 la orden (pendiente)"],
+          ["GET", "/api/ordenes/:id", ["sesion"], "Ver una orden. Solo el paciente dueño o el profesional que la emitió.", null, "La orden"],
+          ["PATCH", "/api/ordenes/:id", ["paciente"], "Archivar o desarchivar una orden.", "{ archivada }", "La orden"],
+          ["PATCH", "/api/resultados/:id", ["paciente"], "Archivar o desarchivar un resultado.", "{ archivado }", "El resultado"],
+          ["GET", "/api/resultados/:id/pdf", ["paciente", "doctor"], "Descargar el PDF del resultado. Solo el paciente dueño o el médico de la orden, y cada descarga queda registrada.", null, "El archivo PDF"],
+          ["POST", "/api/recetas", ["doctor"], "Asignarle una receta a un paciente. La fecha límite sale de la duración.", "{ pacienteId, medicacion, dosis, frecuencia, duracionDias, indicaciones? }", "201 la receta"],
+          ["PATCH", "/api/recetas/:id", ["paciente"], "Archivar o desarchivar una receta (solo las pasadas).", "{ archivada }", "La receta"],
+        ]
+      },
+      {
+        titulo: "Instituciones y sedes", archivo: "rutas/instituciones.ts", rutas: [
+          ["GET", "/api/instituciones?tipos=&lat=&lng=&radioKm=&limite=&sedes=", ["paciente"], "Los centros que podés usar (públicos y los que aceptan tu plan), para el mapa y la reserva.", null, "[instituciones]"],
+          ["GET", "/api/instituciones/:id", ["sesion"], "Una institución con sus sedes y las coberturas que acepta.", null, "La institución"],
+          ["GET", "/api/sedes/buscar?q=", ["sesion"], "El profesional busca dónde atiende: lugares públicos y los que aceptan alguna de sus coberturas.", null, "[sedes]"],
+          ["GET", "/api/sedes?ids=", ["sesion"], "Varias sedes con su institución (los lugares de un profesional).", null, "[sedes]"],
+        ]
+      },
+      {
+        titulo: "Fotos de perfil", archivo: "rutas/fotos.ts", rutas: [
+          ["PUT", "/api/usuarios/yo/foto", ["paciente", "doctor"], "Subir o cambiar tu foto (JPG o PNG). Reemplaza la anterior.", "{ imagen } (en base64)", "{ avatarUrl }"],
+          ["DELETE", "/api/usuarios/yo/foto", ["paciente", "doctor"], "Quitar tu foto: vuelven a verse tus iniciales.", null, "204"],
+          ["GET", "/api/fotos/:archivo", ["publica"], "La imagen. No pide token porque el nombre es al azar y cambia con cada foto: no se puede adivinar.", null, "La imagen"],
+        ]
+      },
+      {
+        titulo: "Notificaciones", archivo: "rutas/notificaciones.ts", rutas: [
+          ["GET", "/api/notificaciones", ["sesion"], "Tus notificaciones, de la más nueva a la más vieja.", null, "[notificaciones]"],
+          ["PATCH", "/api/notificaciones", ["sesion"], "Marcar todas como leídas.", null, "204"],
+          ["PATCH", "/api/notificaciones/:id", ["sesion"], "Marcar una como leída.", null, "204"],
+        ]
+      },
+      {
+        titulo: "Administrador", archivo: "rutas/admin.ts", rutas: [
+          ["GET", "/api/admin/estadisticas", ["admin"], "Cuántas personas usan la app y pacientes por obra social (el Panel).", null, "{ uso, porObraSocial }"],
+          ["GET", "/api/admin/metricas", ["admin"], "Turnos por estado, especialidad e institución, valoración media y mejor valorados (Métricas).", null, "Las métricas"],
+          ["GET", "/api/admin/instituciones?q=", ["admin"], "Todas las instituciones, primero las que tienen coberturas cargadas.", null, "[instituciones]"],
+          ["POST", "/api/admin/instituciones", ["admin"], "Dar de alta una institución con su sede y sus coberturas.", "{ nombre, tipo, direccion, ciudad, telefono?, latitud, longitud, coberturas, fuente, fuenteUrl?, verificadoEl }", "201 la institución"],
+          ["PUT", "/api/admin/instituciones/:id/coberturas", ["admin"], "Reemplazar qué coberturas acepta una institución, siempre con fuente y fecha.", "{ coberturas, fuente, fuenteUrl?, verificadoEl }", "La institución"],
+          ["POST", "/api/admin/planes", ["admin"], "Agregar un plan (y la obra social, si todavía no existe).", "{ obraSocial, plan? }", "201 el plan"],
+        ]
+      },
+    ];
+
+    const QUIEN = {
+      publica: "🔓 Sin sesión",
+      sesion: "🔑 Con sesión",
+      paciente: "🧑 Paciente",
+      doctor: "🩺 Profesional",
+      admin: "🛡️ Admin",
+    };
+    const QUIEN_LARGO = {
+      publica: "Cualquiera, sin token (todavía no entró).",
+      sesion: "Cualquier usuario con sesión: paciente, profesional o admin.",
+      paciente: "Solo un paciente.",
+      doctor: "Solo un profesional.",
+      admin: "Solo el administrador.",
+    };
+    const TODAS = GRUPOS.flatMap((g) => g.rutas);
+    document.querySelectorAll(".cuenta-rutas").forEach((el) => (el.dataset.contar = TODAS.length));
+
+    const filtros = { quien: "todas", verbo: "todos", texto: "" };
+    const sinTildes = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const escapar = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // "/api/turnos/:id?fecha=" → el :id y los filtros con otro color.
+    const caminoHtml = (p) => {
+      const [base, query] = p.split("?");
+      const partes = escapar(base).replace(/(:[a-zA-Z]+)/g, '<span class="param">$1</span>');
+      return partes + (query !== undefined ? `<span class="query">?${escapar(query)}</span>` : "");
+    };
+
+    // Quién puede usarla: "Paciente" incluye las de cualquier usuario con sesión.
+    const puedeUsarla = (q) =>
+      filtros.quien === "todas" ||
+      q.includes(filtros.quien) ||
+      (filtros.quien !== "publica" && q.includes("sesion"));
+
+    function chips(contenedor, opciones, clave) {
+      contenedor.innerHTML = "";
+      opciones.forEach(([valor, texto]) => {
+        const b = document.createElement("button");
+        b.className = "chip";
+        b.textContent = texto;
+        b.setAttribute("aria-pressed", String(filtros[clave] === valor));
+        b.addEventListener("click", () => {
+          filtros[clave] = valor;
+          contenedor.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+          pintarRutas();
+        });
+        contenedor.appendChild(b);
+      });
+    }
+    chips(document.getElementById("rutaQuien"), [
+      ["todas", "Todas"], ["publica", "🔓 Sin sesión"], ["paciente", "🧑 Paciente"], ["doctor", "🩺 Profesional"], ["admin", "🛡️ Admin"],
+    ], "quien");
+    chips(document.getElementById("rutaVerbo"), [
+      ["todos", "Todos"], ["GET", "GET"], ["POST", "POST"], ["PUT", "PUT"], ["PATCH", "PATCH"], ["DELETE", "DELETE"],
+    ], "verbo");
+
+    function pintarRutas() {
+      const palabras = sinTildes(filtros.texto).split(/\s+/).filter(Boolean);
+      const lista = document.getElementById("rutaLista");
+      lista.innerHTML = "";
+      let total = 0;
+      let orden = 0;
+      GRUPOS.forEach((g) => {
+        const rutas = g.rutas.filter(([m, p, q, d]) => {
+          if (filtros.verbo !== "todos" && m !== filtros.verbo) return false;
+          if (!puedeUsarla(q)) return false;
+          const buscable = sinTildes(`${m} ${p} ${d} ${g.titulo}`);
+          return palabras.every((w) => buscable.includes(w));
+        });
+        if (!rutas.length) return;
+        total += rutas.length;
+        const grupo = document.createElement("div");
+        grupo.className = "grupo-rutas";
+        grupo.innerHTML = `<header><h3>${g.titulo}</h3><code>src/${g.archivo}</code></header>`;
+        rutas.forEach(([m, p, q, d, envia, devuelve]) => {
+          const r = document.createElement("details");
+          r.className = "ruta";
+          if (!reduce) r.style.animationDelay = `${Math.min(orden++, 20) * 25}ms`;
+          r.innerHTML = `
+            <summary>
+              <span class="metodo m-${m}">${m}</span>
+              <span class="camino">${caminoHtml(p)}</span>
+              <span class="quien">${q.map((x) => `<span>${QUIEN[x]}</span>`).join("")}</span>
+              <span class="mas" aria-hidden="true">＋</span>
+            </summary>
+            <div class="detalle">
+              <p>${escapar(d)}</p>
+              <dl>
+                <dt>Quién</dt><dd>${q.map((x) => QUIEN_LARGO[x]).join(" ")}</dd>
+                <dt>Le mandás</dt><dd>${envia ? `<code>${escapar(envia)}</code>` : "Nada en el cuerpo" + (p.includes("?") ? " (solo los filtros de la URL)" : "")}</dd>
+                <dt>Te devuelve</dt><dd><code>${escapar(devuelve)}</code></dd>
+              </dl>
+            </div>`;
+          grupo.appendChild(r);
+        });
+        lista.appendChild(grupo);
+      });
+      if (!total) lista.innerHTML = '<div class="card sin-rutas">Ninguna ruta coincide con esos filtros.</div>';
+      document.getElementById("rutaCuenta").textContent =
+        total === TODAS.length ? `Mostrando las ${total} rutas.` : `Mostrando ${total} de ${TODAS.length} rutas.`;
+    }
+    document.getElementById("rutaBuscar").addEventListener("input", (e) => {
+      filtros.texto = e.target.value;
+      pintarRutas();
+    });
+    pintarRutas();
+
+    // Ciclo del turno.
+    const CICLO = {
+      pendiente: "Todo turno nace pendiente: el paciente lo pidió y espera que el profesional responda.",
+      confirmado: "El profesional lo confirmó desde la ficha del paciente. El paciente recibe una notificación.",
+      completado: "Pasó la fecha de un turno confirmado: el servidor lo marca solo al leer los turnos. Ahí se habilita el feedback.",
+      rechazado: "El profesional no lo aceptó, o llegó la fecha sin confirmarse. Libera el horario.",
+      cancelado: "Lo canceló el paciente, hasta 24 h antes. Libera el horario. Reprogramar = cancelar + reservar otro, en una sola operación.",
+    };
+    document.querySelectorAll("[data-estado]").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll("[data-estado]").forEach((x) => x.classList.toggle("encendido", x === b));
+      document.getElementById("cicloTexto").textContent = CICLO[b.dataset.estado];
+    }));
+
+    // Aparecer al hacer scroll y contar los números.
+    const observador = new IntersectionObserver((entradas) => {
+      entradas.forEach((en) => {
+        if (!en.isIntersecting) return;
+        en.target.classList.add("visible");
+        const n = en.target.querySelector("[data-contar]") ?? (en.target.dataset.contar ? en.target : null);
+        if (n && !n.dataset.listo) {
+          n.dataset.listo = "1";
+          const meta = Number(n.dataset.contar);
+          const inicio = performance.now();
+          const paso = (t) => {
+            const p = reduce ? 1 : Math.min(1, (t - inicio) / 900);
+            n.textContent = Math.round(meta * (1 - Math.pow(1 - p, 3))).toLocaleString("es-AR");
+            if (p < 1) requestAnimationFrame(paso);
+          };
+          requestAnimationFrame(paso);
+        }
+        observador.unobserve(en.target);
+      });
+    }, { threshold: 0.2 });
+    document.querySelectorAll(".aparece, .numero, .cuenta-rutas").forEach((el) => observador.observe(el));
+  </script>
+</body>
+
+</html>

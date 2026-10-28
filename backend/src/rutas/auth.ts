@@ -1,0 +1,86 @@
+import { Router, type Request } from "express";
+
+import { revocarSesion } from "../auth/sesiones";
+import { registrarAccion } from "../auditoria";
+import { ErrorHttp } from "../errores";
+import { autenticar, usuarioDe } from "../middlewares/autenticar";
+import * as auth from "../servicios/auth";
+import { datosPublicos, identidadDisponible, leerCodigoDni } from "../servicios/identidad";
+import { contrasena, cuerpo, texto } from "../validacion";
+
+export const rutasAuth = Router();
+
+/** IP y dispositivo del pedido, para la sesión y el registro de auditoría. */
+const origenDe = (req: Request): auth.Origen => ({ ip: req.ip ?? "", dispositivo: req.get("user-agent")?.slice(0, 200) });
+
+// POST /api/auth/login { dni, password } → { token, expiraEn, sesion }
+rutasAuth.post("/login", async (req, res) => {
+  const datos = cuerpo(req.body);
+  res.json(await auth.iniciarSesion(texto(datos, "dni", 20), contrasena(datos, "password"), origenDe(req)));
+});
+
+// POST /api/auth/logout → 204 (revoca el token)
+rutasAuth.post("/logout", autenticar, async (req, res) => {
+  await revocarSesion(req.sesionId!);
+  await registrarAccion({ usuarioId: usuarioDe(req).id, accion: "logout", ip: req.ip });
+  res.status(204).end();
+});
+
+// PATCH /api/auth/contrasena { actual, nueva } → 204 (corta las otras sesiones)
+rutasAuth.patch("/contrasena", autenticar, async (req, res) => {
+  const datos = cuerpo(req.body);
+  await auth.cambiarContrasena(usuarioDe(req).id, req.sesionId!, contrasena(datos, "actual"), contrasena(datos, "nueva"), req.ip ?? "");
+  res.status(204).end();
+});
+
+// POST /api/auth/registro/dni { codigo } → { dni, nombre, apellido }. Lee el código PDF417 del DNI escaneado
+// en el registro y avisa si ya tiene cuenta. No guarda nada: el código se vuelve a mandar al crear la cuenta.
+rutasAuth.post("/registro/dni", async (req, res) => {
+  const documento = leerCodigoDni(texto(cuerpo(req.body), "codigo", 1000));
+  await identidadDisponible(documento);
+  res.json(datosPublicos(documento));
+});
+
+// POST /api/auth/registro/paciente { codigoDni, password, planMedicoId } → 201 { token, expiraEn, sesion }
+// (DNI, nombre y apellido salen del código del DNI).
+rutasAuth.post("/registro/paciente", async (req, res) => {
+  const datos = cuerpo(req.body);
+  const respuesta = await auth.registrarPaciente(
+    {
+      codigoDni: texto(datos, "codigoDni", 1000),
+      password: contrasena(datos, "password"),
+      planMedicoId: texto(datos, "planMedicoId", 80),
+    },
+    origenDe(req),
+  );
+  res.status(201).json(respuesta);
+});
+
+const datosVerificacion = (datos: Record<string, unknown>): auth.DatosVerificacion => ({
+  dni: texto(datos, "dni", 20),
+  matricula: texto(datos, "matricula", 30),
+  profesion: texto(datos, "profesion", 80),
+});
+
+// POST /api/auth/registro/profesional/verificar { dni, matricula, profesion } → ficha del padrón
+rutasAuth.post("/registro/profesional/verificar", async (req, res) => {
+  res.json(await auth.verificarProfesional(datosVerificacion(cuerpo(req.body))));
+});
+
+// POST /api/auth/registro/profesional { codigoDni, dni, matricula, profesion, password, genero, especialidadId } → 201
+rutasAuth.post("/registro/profesional", async (req, res) => {
+  const datos = cuerpo(req.body);
+  const genero = texto(datos, "genero", 20);
+  if (genero !== "femenino" && genero !== "masculino") throw new ErrorHttp(400, "Elegí tu género.");
+  const respuesta = await auth.registrarProfesional(
+    {
+      ...datosVerificacion(datos),
+      codigoDni: texto(datos, "codigoDni", 1000),
+      password: contrasena(datos, "password"),
+      genero,
+      especialidadId: texto(datos, "especialidadId", 80),
+    },
+    origenDe(req),
+  );
+  res.status(201).json(respuesta);
+});

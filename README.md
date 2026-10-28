@@ -11,13 +11,14 @@ del proyecto (dominio, reglas de negocio, roles) está en el `CLAUDE.md` del wor
 
 ## Stack
 
-Node.js + TypeScript con el módulo nativo **`node:http`** (sin framework), **Prisma** y **SQLite**.
-Router, body JSON, CORS, errores y tokens de sesión se escriben a mano.
+Node.js + TypeScript con **Express 5**, **Prisma 6** y **SQLite**, con la misma estructura que la práctica
+de la cátedra (`Practica17926`). Sesiones, roles, validación y reglas de negocio se escriben a mano
+(decidido el 27/10/2026; antes era `node:http` sin framework).
 
 ## Estructura
 
 ```
-backend/   código de la API (todavía vacío: se arma en el Sprint 2)
+backend/   código de la API (Express + Prisma; ver backend/README.md)
 docs/      documentación del backend
 ```
 
@@ -33,6 +34,7 @@ docs/      documentación del backend
 | [05 · Sesiones y tokens](docs/05-sesiones-y-tokens.md) | Login, tokens de sesión, contraseñas y claves de terceros. |
 | [06 · Reglas de negocio](docs/06-reglas-de-negocio.md) | Estados de turnos, órdenes, resultados, recetas, archivado y permisos. |
 | [07 · Pendientes](docs/07-pendientes.md) | Decisiones tomadas y puntos a confirmar. |
+| [08 · Coberturas](docs/08-coberturas.md) | Obras sociales ↔ instituciones y profesionales: quién las carga, modelo, catálogo y seed verificado. |
 
 ## Estado
 
