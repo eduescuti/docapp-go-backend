@@ -8,7 +8,7 @@ import { ErrorHttp } from "../errores";
 import type { UsuarioDeSesion } from "../tipos/express";
 import { hoyArgentina } from "../utils/tiempo";
 import { institucionVisible } from "./cobertura";
-import { notificar } from "./notificaciones";
+import { enviarPush, notificar } from "./notificaciones";
 import { exigirVinculo } from "./vinculo";
 
 // Órdenes y resultados (06-reglas-de-negocio.md#órdenes). Los resultados vienen solo del seed este sprint.
@@ -100,7 +100,7 @@ export async function crearOrden(medicoId: string, usuarioId: string, datos: Dat
   if ((await prisma.institucion.count({ where: { id: datos.institucionId, ...institucionVisible(plan) } })) === 0) {
     throw new ErrorHttp(400, "Ese lugar no atiende la cobertura del paciente.");
   }
-  const orden = await prisma.$transaction(async (tx) => {
+  const [orden, aviso] = await prisma.$transaction(async (tx) => {
     const creada = await tx.orden.create({
       data: {
         medicoId,
@@ -113,7 +113,7 @@ export async function crearOrden(medicoId: string, usuarioId: string, datos: Dat
       include: { estudios: true, medico: { select: { genero: true, usuario: { select: { nombre: true, apellido: true } } } } },
     });
     const { medico } = creada;
-    await notificar(
+    const aviso = await notificar(
       {
         usuarioId: usuarioPaciente,
         tipo: "nueva_orden",
@@ -124,8 +124,9 @@ export async function crearOrden(medicoId: string, usuarioId: string, datos: Dat
       },
       tx,
     );
-    return creada;
+    return [creada, aviso] as const;
   });
+  enviarPush(aviso);
   await registrarAccion({ usuarioId, accion: "alta_orden", entidad: "orden", entidadId: orden.id });
   return aOrden(orden);
 }

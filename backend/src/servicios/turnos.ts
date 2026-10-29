@@ -8,7 +8,7 @@ import { ahoraArgentina, diaDeLaSemana, diaSiguiente, hoyArgentina, minutosHasta
 import { institucionVisible, medicoVisible, planDelPaciente } from "./cobertura";
 import { aInstitucion, aPaciente, aSede, INCLUIR_INSTITUCION, INCLUIR_PACIENTE } from "./formato";
 import { buscar as buscarMedicos } from "./medicos";
-import { notificar } from "./notificaciones";
+import { enviarPush, notificar, type Aviso } from "./notificaciones";
 
 // Turnos (06-reglas-de-negocio.md#turnos). Un turno activo (pendiente o confirmado) ocupa el horario; uno
 // cancelado o rechazado lo libera. Todo turno nuevo nace pendiente.
@@ -49,13 +49,14 @@ export async function vencerTurnos(): Promise<void> {
   if (vencidos.length === 0) return;
   const confirmados = vencidos.filter((t) => t.estado === "confirmado").map((t) => t.id);
   const pendientes = vencidos.filter((t) => t.estado === "pendiente");
-  await prisma.$transaction(async (tx) => {
+  const avisos = await prisma.$transaction(async (tx) => {
     await tx.turno.updateMany({ where: { id: { in: confirmados }, estado: "confirmado" }, data: { estado: "completado" } });
     const { count } = await tx.turno.updateMany({ where: { id: { in: pendientes.map((t) => t.id) }, estado: "pendiente" }, data: { estado: "rechazado" } });
+    const avisos: Aviso[] = [];
     // Si otro pedido ya los venció a la vez, no se avisa dos veces.
     if (count === pendientes.length) {
       for (const t of pendientes) {
-        await notificar(
+        const aviso = await notificar(
           {
             usuarioId: t.paciente.usuarioId,
             tipo: "turno_rechazado",
@@ -66,9 +67,12 @@ export async function vencerTurnos(): Promise<void> {
           },
           tx,
         );
+        avisos.push(aviso);
       }
     }
+    return avisos;
   });
+  enviarPush(...avisos);
 }
 
 /** Lo que hace falta para escribir el aviso de un turno: quién es quién y de qué especialidad. */
@@ -330,9 +334,9 @@ export async function cambiarTurno(usuario: UsuarioDeSesion, turnoId: string, ca
     if (cambio.estado !== "cancelado") throw new ErrorHttp(403, "No podés hacer ese cambio en un turno.");
     const motivo = motivoSinCambios(turno);
     if (motivo) throw new ErrorHttp(409, motivo);
-    const cancelado = await prisma.$transaction(async (tx) => {
+    const [cancelado, aviso] = await prisma.$transaction(async (tx) => {
       const t = await tx.turno.update({ where: { id: turno.id }, data: { estado: "cancelado", canceladoEn: new Date() }, include: INCLUIR_PARA_AVISO });
-      await notificar(
+      const aviso = await notificar(
         {
           usuarioId: t.medico.usuarioId,
           tipo: "turno_cancelado",
@@ -343,8 +347,9 @@ export async function cambiarTurno(usuario: UsuarioDeSesion, turnoId: string, ca
         },
         tx,
       );
-      return t;
+      return [t, aviso] as const;
     });
+    enviarPush(aviso);
     await registrarAccion({ usuarioId: usuario.id, accion: "cancelacion_turno", entidad: "turno", entidadId: turno.id });
     return aTurno(cancelado);
   }
@@ -354,10 +359,10 @@ export async function cambiarTurno(usuario: UsuarioDeSesion, turnoId: string, ca
     if (!turno) throw new ErrorHttp(404, "No existe ese turno.");
     if (turno.estado !== "pendiente") throw new ErrorHttp(409, "Este turno ya no está pendiente de confirmación.");
     const estado = cambio.estado;
-    const respondido = await prisma.$transaction(async (tx) => {
+    const [respondido, aviso] = await prisma.$transaction(async (tx) => {
       const t = await tx.turno.update({ where: { id: turno.id }, data: { estado, respondidoEn: new Date() }, include: INCLUIR_PARA_AVISO });
       const confirmado = estado === "confirmado";
-      await notificar(
+      const aviso = await notificar(
         {
           usuarioId: t.paciente.usuarioId,
           tipo: confirmado ? "turno_confirmado" : "turno_rechazado",
@@ -370,8 +375,9 @@ export async function cambiarTurno(usuario: UsuarioDeSesion, turnoId: string, ca
         },
         tx,
       );
-      return t;
+      return [t, aviso] as const;
     });
+    enviarPush(aviso);
     await registrarAccion({ usuarioId: usuario.id, accion: `turno_${cambio.estado}`, entidad: "turno", entidadId: turno.id });
     return aTurno(respondido);
   }

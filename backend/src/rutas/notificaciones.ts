@@ -16,8 +16,8 @@ rutasNotificaciones.post("/fcm-token", async (req, res, next) => {
       return;
     }
 
-    const usuario = usuarioDe(req);
-    await notificaciones.guardarFcmToken(usuario.id, token);
+    usuarioDe(req);
+    await notificaciones.guardarFcmToken(req.sesionId!, token);
     res.status(204).end();
   } catch (error) {
     next(error);

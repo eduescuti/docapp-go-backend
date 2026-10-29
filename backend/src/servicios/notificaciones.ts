@@ -17,7 +17,7 @@ export type TipoNotificacion =
   | "nueva_receta"
   | "nueva_orden";
 
-interface Aviso {
+export interface Aviso {
   usuarioId: string;
   tipo: TipoNotificacion;
   titulo: string;
@@ -26,14 +26,25 @@ interface Aviso {
   referenciaId?: string;
 }
 
-/** 
- * Crea una notificación en la BD y despacha el Push FCM si el usuario tiene token registrado.
+/**
+ * Guarda la notificación en la base, dentro de la transacción del cambio, y la devuelve para mandar el push con
+ * `enviarPush` cuando la transacción terminó bien.
  */
-export async function notificar(aviso: Aviso, tx: Prisma.TransactionClient = prisma): Promise<void> {
-  // 1. Guarda la notificación en la BD
+export async function notificar(aviso: Aviso, tx: Prisma.TransactionClient = prisma): Promise<Aviso> {
   await tx.notificacion.create({ data: aviso });
+  return aviso;
+}
 
-  // 2. Busca los tokens de las sesiones activas del usuario
+/**
+ * Manda el push de cada aviso a los teléfonos del usuario. Va después del commit: si el cambio se revierte no sale
+ * ningún push, y la espera de FCM no alarga la transacción (Prisma la corta a los 5 s). No se espera: la respuesta al
+ * pedido no depende de FCM, y si falla solo se registra (la notificación ya está en la base).
+ */
+export function enviarPush(...avisos: Aviso[]): void {
+  for (const aviso of avisos) void despacharPush(aviso);
+}
+
+async function despacharPush(aviso: Aviso): Promise<void> {
   try {
     const sesiones = await prisma.sesion.findMany({
       where: {
@@ -124,32 +135,14 @@ export async function marcarTodas(usuarioId: string): Promise<void> {
   });
 }
 
-export async function guardarFcmToken(usuarioId: string, token: string): Promise<void> {
-  // 1. Busca la sesión activa más reciente del usuario
-  const sesionActiva = await prisma.sesion.findFirst({
-    where: {
-      usuarioId,
-      revocadaEn: null,
-      expiraEn: { gt: new Date() },
-    },
-    orderBy: { ultimoUsoEn: "desc" },
-  });
-
-  if (sesionActiva) {
-    // 2. Limpia este token de cualquier otra sesión del mismo usuario para evitar duplicaciones
-    await prisma.sesion.updateMany({
-      where: {
-        usuarioId,
-        fcmToken: token,
-        id: { not: sesionActiva.id },
-      },
-      data: { fcmToken: null },
-    });
-
-    // 3. Asigna el token a la sesión activa actual
-    await prisma.sesion.update({
-      where: { id: sesionActiva.id },
-      data: { fcmToken: token },
-    });
-  }
+/**
+ * Asocia el token FCM a la sesión del pedido (la que ya validó `autenticar`). Si el teléfono ya lo tenía en otra
+ * sesión (de este u otro usuario que entró antes en el mismo teléfono), se lo saca: un dispositivo recibe solo los
+ * avisos de quien tiene la sesión abierta ahí.
+ */
+export async function guardarFcmToken(sesionId: string, token: string): Promise<void> {
+  await prisma.$transaction([
+    prisma.sesion.updateMany({ where: { fcmToken: token, id: { not: sesionId } }, data: { fcmToken: null } }),
+    prisma.sesion.update({ where: { id: sesionId }, data: { fcmToken: token } }),
+  ]);
 }
