@@ -5,7 +5,7 @@ import { prisma } from "../db";
 import { ErrorHttp } from "../errores";
 import { diaSiguiente, hoyArgentina } from "../utils/tiempo";
 import { buscar as buscarMedicos } from "./medicos";
-import { notificar } from "./notificaciones";
+import { enviarPush, notificar } from "./notificaciones";
 import { exigirVinculo } from "./vinculo";
 
 // Recetas (06-reglas-de-negocio.md#recetas). El estado (activa / pasada) no se guarda: se calcula con vigenteHasta.
@@ -95,13 +95,13 @@ export async function crearReceta(medicoId: string, usuarioId: string, datos: Da
   const fecha = hoyArgentina();
   let vigenteHasta = fecha;
   for (let i = 0; i < datos.duracionDias; i++) vigenteHasta = diaSiguiente(vigenteHasta);
-  const receta = await prisma.$transaction(async (tx) => {
+  const [receta, aviso] = await prisma.$transaction(async (tx) => {
     const creada = await tx.receta.create({
       data: { ...datos, medicoId, fecha, vigenteHasta, indicaciones: datos.indicaciones || null },
       include: { paciente: { select: { usuarioId: true } }, medico: { select: { genero: true, usuario: { select: { nombre: true, apellido: true } } } } },
     });
     const { medico } = creada;
-    await notificar(
+    const aviso = await notificar(
       {
         usuarioId: creada.paciente.usuarioId,
         tipo: "nueva_receta",
@@ -112,8 +112,9 @@ export async function crearReceta(medicoId: string, usuarioId: string, datos: Da
       },
       tx,
     );
-    return creada;
+    return [creada, aviso] as const;
   });
+  enviarPush(aviso);
   await registrarAccion({ usuarioId, accion: "alta_receta", entidad: "receta", entidadId: receta.id });
   return aReceta(receta);
 }

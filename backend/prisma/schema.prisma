@@ -59,6 +59,7 @@ model Sesion {
   revocadaEn  DateTime?
   dispositivo String?
   ip          String?
+  fcmToken    String?
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 

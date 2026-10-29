@@ -7,6 +7,23 @@ import * as notificaciones from "../servicios/notificaciones";
 export const rutasNotificaciones = Router();
 rutasNotificaciones.use(autenticar);
 
+// POST /api/notificaciones/fcm-token → asocia el token FCM a la sesión activa del usuario
+rutasNotificaciones.post("/fcm-token", async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ error: "Token FCM inválido o ausente." });
+      return;
+    }
+
+    usuarioDe(req);
+    await notificaciones.guardarFcmToken(req.sesionId!, token);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/notificaciones → las del usuario, de la más nueva a la más vieja.
 rutasNotificaciones.get("/", async (req, res) => {
   const usuario = usuarioDe(req);
