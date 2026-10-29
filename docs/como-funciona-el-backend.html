@@ -1086,6 +1086,29 @@
       margin: 0 4px 6px 0;
     }
 
+    /* Notificaciones */
+    .avisos {
+      list-style: none;
+      padding-left: 0 !important;
+    }
+
+    .avisos li {
+      margin-bottom: 10px;
+    }
+
+    .avisos li:last-child {
+      margin-bottom: 0;
+    }
+
+    .avisos code {
+      font-size: 11px;
+    }
+
+    .avisos span {
+      display: block;
+      color: var(--muted-fg);
+    }
+
     .numeros {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1204,6 +1227,7 @@
         <a href="#sesion">La sesión (token)</a>
         <a href="#rutas">Las rutas</a>
         <a href="#reglas">Reglas</a>
+        <a href="#notificaciones">Notificaciones</a>
         <a href="#base">La base</a>
         <a href="#levantar">Cómo levantarlo</a>
       </nav>
@@ -1547,7 +1571,56 @@
         <div class="regla"><span class="n">⏱</span><span>Turnos de <b>30 min</b> dentro de las franjas que carga el
             profesional.</span></div>
         <div class="regla"><span class="n">🔔</span><span>Las <b>notificaciones</b> se crean en la misma transacción que
-            el cambio que las dispara.</span></div>
+            el cambio que las dispara; el push sale después. <a href="#notificaciones">Cuáles hay ↓</a></span></div>
+      </div>
+    </section>
+
+    <section id="notificaciones">
+      <h2>Notificaciones</h2>
+      <p class="bajada">Las genera el servidor cuando pasa algo: nadie las crea a mano. Cada una se guarda en la tabla
+        <code>notificaciones</code> (la lista de la campana) y además llega como <b>push</b> al teléfono con Firebase
+        Cloud Messaging (FCM).</p>
+      <div class="card" style="margin-bottom:12px">
+        <h3 style="font-size:15px;margin:0 0 4px">Cómo viaja un aviso</h3>
+        <p style="margin:0;color:var(--muted-fg);font-size:14px">Al entrar, la app manda el token FCM del teléfono
+          (<code>POST /api/notificaciones/fcm-token</code>) y queda guardado en su sesión: al cerrar sesión deja de
+          recibir. Cuando pasa algo, <code>notificar()</code> guarda el aviso en la misma transacción que el cambio y,
+          recién cuando la transacción terminó bien, <code>enviarPush()</code> lo manda. Si el cambio se revierte, no
+          sale ningún push.</p>
+        <div class="token" aria-hidden="true"><span>📝 notificar()</span><span class="flecha">→ commit →</span><span>📲
+            enviarPush()</span><span class="flecha">→ FCM →</span><span>🔔 teléfono</span></div>
+      </div>
+      <div class="capas">
+        <div class="card capa aparece">
+          <h3>🧑 Paciente · 5</h3>
+          <ul class="avisos">
+            <li><b>Turno confirmado</b> <code>turno_confirmado</code><span>El profesional confirma su turno.</span></li>
+            <li><b>Turno rechazado</b> <code>turno_rechazado</code><span>El profesional no acepta su turno.</span></li>
+            <li><b>Turno no confirmado</b> <code>turno_rechazado</code><span>Llega la fecha y el turno seguía
+                pendiente: se rechaza solo.</span></li>
+            <li><b>Nueva orden</b> <code>nueva_orden</code><span>El profesional le asigna una orden.</span></li>
+            <li><b>Nueva receta</b> <code>nueva_receta</code><span>El profesional le emite una receta.</span></li>
+          </ul>
+        </div>
+        <div class="card capa aparece">
+          <h3>🩺 Profesional · 1</h3>
+          <ul class="avisos">
+            <li><b>Turno cancelado</b> <code>turno_cancelado</code><span>Un paciente cancela su turno; el horario
+                queda libre.</span></li>
+          </ul>
+        </div>
+        <div class="card capa aparece">
+          <h3>🛠️ Admin · 0</h3>
+          <p>No recibe notificaciones.</p>
+        </div>
+      </div>
+      <div class="reglas">
+        <div class="regla"><span class="n">!</span><span>El profesional todavía <b>no tiene pantalla</b> de
+            notificaciones en la app: el aviso le llega solo como push.</span></div>
+        <div class="regla"><span class="n">!</span><span>Declarados pero sin generar: <code>turno_reprogramado</code>,
+            <code>recordatorio_turno</code> y <code>resultado_disponible</code>.</span></div>
+        <div class="regla"><span class="n">!</span><span>Pedir o reprogramar un turno <b>no le avisa</b> al
+            profesional: lo ve en su Agenda.</span></div>
       </div>
     </section>
 
@@ -1613,7 +1686,7 @@
       ["¿Le toca?", "requerirRol(\"paciente\"): solo un paciente puede reservar."],
       ["La ruta valida", "POST /api/turnos lee los 5 pasos de la reserva (fecha, hora, sedeId, especialidadId, medicoId) y revisa el formato."],
       ["Las reglas", "El servicio revisa todo junto, en una transacción: cobertura, franja, especialidad del profesional, que no haya pasado y que esté libre."],
-      ["Se guarda", "Prisma inserta el turno (nace pendiente) y la notificación para el profesional. Los índices únicos de SQLite frenan una doble reserva."],
+      ["Se guarda", "Prisma inserta el turno (nace pendiente). Los índices únicos de SQLite frenan una doble reserva."],
     ];
     const PEDIDO = 'POST /api/turnos\nAuthorization: Bearer x7Fq…9aB\n\n{ "fecha": "2026-11-02", "hora": "10:30",\n  "sedeId": "sede-…", "especialidadId": "esp-enfermeria",\n  "medicoId": "med-sosa" }';
     const ESCENARIOS = {
@@ -1906,6 +1979,7 @@
           ["GET", "/api/notificaciones", ["sesion"], "Tus notificaciones, de la más nueva a la más vieja.", null, "[notificaciones]"],
           ["PATCH", "/api/notificaciones", ["sesion"], "Marcar todas como leídas.", null, "204"],
           ["PATCH", "/api/notificaciones/:id", ["sesion"], "Marcar una como leída.", null, "204"],
+          ["POST", "/api/notificaciones/fcm-token", ["sesion"], "Guardar el token FCM del teléfono en tu sesión, para recibir los avisos como push.", "{ token }", "204"],
         ]
       },
       {
