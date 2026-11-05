@@ -24,6 +24,7 @@ const port = Number(process.env.PORT ?? 3000);
 // Primero los middlewares (el orden importa: cors antes de las rutas).
 // En el celular (Expo Go) no hay CORS; en web la app llama desde http://localhost:8081.
 app.use(cors({ origin: process.env.ORIGEN_PERMITIDO }));
+
 // La foto de perfil pesa más que el límite general: su ruta lee el JSON antes (y el general ya no lo vuelve a leer).
 app.use("/api/usuarios/yo/foto", parserFoto);
 app.use(express.json({ limit: "100kb" }));

@@ -125,6 +125,8 @@ interface DatosDemo {
 
 /** Contraseñas de las cuentas de prueba (las mismas que USUARIOS-DE-PRUEBA.md del frontend). */
 const CONTRASENA = { admin: "Admin123$", paciente: "Paciente123$", doctor: "Medico123$" };
+/** DNI de la cuenta de administración: ficticio y alto, para que sea difícil que coincida con el de una persona. */
+const DNI_ADMIN = "99000001";
 
 const RAIZ = path.resolve(__dirname, "..");
 const CARPETA_RESULTADOS = path.join(RAIZ, "uploads", "resultados");
@@ -272,7 +274,7 @@ async function main(): Promise<void> {
     hashearContrasena(CONTRASENA.paciente),
     hashearContrasena(CONTRASENA.doctor),
   ]);
-  await prisma.usuario.create({ data: { dni: "admin", passwordHash: hashAdmin, rol: "admin", nombre: "Administración", apellido: "DocApp Go" } });
+  await prisma.usuario.create({ data: { dni: DNI_ADMIN, passwordHash: hashAdmin, rol: "admin", nombre: "Administración", apellido: "DocApp Go" } });
 
   for (const p of datos.pacientes) {
     await prisma.usuario.create({

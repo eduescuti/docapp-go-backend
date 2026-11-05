@@ -36,7 +36,7 @@ servidor de la sesión. Así nadie puede pedir los turnos de otro cambiando un n
 | Método | Ruta | Rol | Body / query | Respuesta |
 |---|---|---|---|---|
 | `GET` | `/api/health` | pública | — | `200 { ok: true }` |
-| `POST` | `/api/auth/login` | pública | `{ dni, password }` | `200 { token, expiraEn, sesion }` · `401` · `429` |
+| `POST` | `/api/auth/login` | pública | `{ dni, password }` | `200 { token, expiraEn, sesion }` · `400` DNI que no tiene 7 u 8 dígitos · `401` · `429` |
 | `POST` | `/api/auth/logout` | todos | — | `204` (revoca el token) |
 | `GET` | `/api/sesion` | todos | — | `200 sesion` (la misma forma que `Sesion` del frontend) |
 | `POST` | `/api/auth/registro/dni` | pública | `{ codigo }` (texto del PDF417 del DNI) | `200 { dni, nombre, apellido }` · `400` si no es un código de DNI · `409` si ese DNI (número o ejemplar) ya tiene cuenta. No guarda nada ([06](06-reglas-de-negocio.md#verificación-de-identidad-del-registro)). |

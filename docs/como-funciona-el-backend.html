@@ -1781,7 +1781,7 @@
       {
         corto: "1. Entrar", titulo: "1. Entrás con DNI y contraseña",
         escena: '<div class="actor"><span class="icono">📱</span>App</div><span class="viaja">DNI + contraseña</span><div class="actor"><span class="icono">🖥️</span>Servidor</div>',
-        texto: '<p>La app manda <code>POST /api/auth/login</code>. El servidor busca tu usuario por DNI y compara la contraseña con el hash guardado (scrypt). Si no coincide, responde siempre “DNI o contraseña incorrectos” (no dice cuál de los dos falló) y suma un intento fallido: con 5 seguidos en 15 minutos te hace esperar.</p>'
+        texto: '<p>La app manda <code>POST /api/auth/login</code>. El servidor revisa que el DNI tenga 7 u 8 dígitos (si no, responde 400), busca tu usuario por DNI y compara la contraseña con el hash guardado (scrypt). Si no coincide, responde siempre “DNI o contraseña incorrectos” (no dice cuál de los dos falló) y suma un intento fallido: con 5 seguidos en 15 minutos te hace esperar.</p>'
       },
       {
         corto: "2. Crear el token", titulo: "2. El servidor crea el token",
@@ -1884,7 +1884,7 @@
       },
       {
         titulo: "Entrar y registrarse", archivo: "rutas/auth.ts", rutas: [
-          ["POST", "/api/auth/login", ["publica"], "Entrar con DNI y contraseña. Crea una sesión nueva. Con 5 intentos fallidos seguidos del mismo DNI en 15 minutos, se bloquea un rato.", "{ dni, password }", "{ token, expiraEn, sesion }"],
+          ["POST", "/api/auth/login", ["publica"], "Entrar con DNI y contraseña. El DNI tiene que tener 7 u 8 dígitos. Crea una sesión nueva. Con 5 intentos fallidos seguidos del mismo DNI en 15 minutos, se bloquea un rato.", "{ dni, password }", "{ token, expiraEn, sesion }"],
           ["POST", "/api/auth/logout", ["sesion"], "Cerrar sesión: el servidor marca el token como revocado y deja de servir.", null, "204 (sin contenido)"],
           ["PATCH", "/api/auth/contrasena", ["sesion"], "Cambiar la contraseña. Corta todas las otras sesiones de la cuenta.", "{ actual, nueva }", "204"],
           ["POST", "/api/auth/registro/dni", ["publica"], "Lee el código del DNI escaneado con la cámara y avisa si ese DNI ya tiene cuenta. No guarda nada.", "{ codigo }", "{ dni, nombre, apellido }"],

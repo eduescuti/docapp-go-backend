@@ -17,7 +17,7 @@ datasource db {
 
 model Usuario {
   id            String   @id @default(uuid())
-  /// DNI del login único (regla 11). La cuenta de administración usa "admin".
+  /// DNI del login único (regla 11): 7 u 8 dígitos en todas las cuentas, también en la de administración.
   dni           String   @unique
   /// scrypt: "salt:hash" en hexadecimal. Nunca la contraseña en texto plano.
   passwordHash  String

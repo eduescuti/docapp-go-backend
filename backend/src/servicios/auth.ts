@@ -15,13 +15,15 @@ export interface Origen {
 
 const INCLUIR_PERFIL = { paciente: true, medico: true } as const;
 const ERROR_CREDENCIALES = "DNI o contraseña incorrectos.";
+const ERROR_DNI = "Ingresá un DNI válido (7 u 8 dígitos).";
 const ERROR_CUENTA_EXISTENTE = "Ya existe una cuenta con ese DNI. Iniciá sesión.";
 const ERROR_CONTRASENA = "La contraseña no cumple los requisitos de seguridad.";
 
 /** Regla 11: login único con DNI + contraseña; el rol lo determina la cuenta. */
 export async function iniciarSesion(dniIngresado: string, password: string, origen: Origen) {
-  // "admin" no es un DNI: solo se le sacan puntos y espacios a los números.
-  const dni = dniIngresado.trim() === "admin" ? "admin" : normalizarDni(dniIngresado);
+  const dni = normalizarDni(dniIngresado);
+  // El frontend ya lo revisa, pero a la API se la puede llamar sin pasar por la app.
+  if (!esDniValido(dni)) throw new ErrorHttp(400, ERROR_DNI);
   verificarIntentos(dni, origen.ip);
   const usuario = await prisma.usuario.findUnique({ where: { dni }, include: INCLUIR_PERFIL });
   // Mismo mensaje para DNI inexistente, contraseña errónea o cuenta desactivada: no revela qué cuentas existen.
@@ -94,7 +96,7 @@ const coincideProfesion = (a: string, b: string) => a.toLowerCase().includes(b.t
 export async function verificarProfesional(datos: DatosVerificacion): Promise<FichaPadron> {
   const dni = normalizarDni(datos.dni);
   const matricula = datos.matricula.trim();
-  if (!esDniValido(dni)) throw new ErrorHttp(400, "Ingresá un DNI válido (7 u 8 dígitos).");
+  if (!esDniValido(dni)) throw new ErrorHttp(400, ERROR_DNI);
   await dniLibre(dni);
 
   const local = await prisma.profesionalPadron.findMany({ where: { dni, matricula } });

@@ -378,7 +378,7 @@
   const TABLAS = [
     { key: "usuarios", mod: "identidad", desc: "Cuenta de cualquier rol. Login único con DNI + contraseña (regla 11).", cols: [
       c("id", "TEXT", { pk: true }),
-      c("dni", "TEXT", { uq: true, nota: "\"admin\" para la cuenta de administración" }),
+      c("dni", "TEXT", { uq: true, nota: "7 u 8 dígitos, también en la cuenta de administración" }),
       c("passwordHash", "TEXT", { nota: "scrypt (salt:hash), nunca en texto plano" }),
       c("rol", "TEXT", { vals: "paciente | doctor | admin" }),
       c("nombre", "TEXT"), c("apellido", "TEXT"),
@@ -582,7 +582,7 @@
     { tag: "Regla 6", t: "Feedback de turnos cumplidos", p: "<code>feedbacks.turnoId</code> obligatorio y <code>UNIQUE</code>: un feedback por turno. El servicio exige que esté completado." },
     { tag: "Regla 7", t: "Órdenes y recetas con autor", p: "<code>ordenes.medicoId</code> y <code>recetas.medicoId</code> son obligatorios y sin cascada: siempre queda quién las emitió." },
     { tag: "Regla 8", t: "Resultados protegidos", p: "El PDF vive fuera de la carpeta pública; solo se descarga con token del paciente o del médico de la orden, y cada descarga va a <code>registro_auditoria</code>." },
-    { tag: "Regla 11", t: "Login único por DNI", p: "<code>usuarios.dni</code> es <code>UNIQUE</code> y <code>usuarios.rol</code> decide el modo. El admin usa el DNI \"admin\"." },
+    { tag: "Regla 11", t: "Login único por DNI", p: "<code>usuarios.dni</code> es <code>UNIQUE</code> y <code>usuarios.rol</code> decide el modo. El DNI se valida en el login: 7 u 8 dígitos en todas las cuentas." },
     { tag: "Regla 13", t: "Registro contra el padrón", p: "<code>profesionales_padron</code> con <code>UNIQUE (dni, matricula, profesion)</code>; <code>medicos.padronId</code> guarda con qué ficha se verificó." },
     { tag: "28/10/2026 · Regla 20", t: "DNI verificado en el registro", p: "<code>usuarios.tramiteHash</code> <code>UNIQUE</code>: HMAC del número de trámite del DNI escaneado (64 caracteres hexadecimales, trigger). Ni imagen ni contenido del código." },
     { tag: "28/10/2026", t: "Especialidad por profesión", p: "<code>especialidades.profesion</code>: un kinesiólogo no puede elegir \"Cardiología\" al registrarse." },

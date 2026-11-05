@@ -152,7 +152,7 @@ datasource db {
 
 model Usuario {
   id            String   @id @default(uuid())
-  /// DNI del login único (regla 11). La cuenta de administración usa "admin".
+  /// DNI del login único (regla 11): 7 u 8 dígitos en todas las cuentas, también en la de administración.
   dni           String   @unique
   /// scrypt: "salt:hash" en hexadecimal. Nunca la contraseña en texto plano.
   passwordHash  String
@@ -865,7 +865,7 @@ seed las corre a la fecha en que se ejecuta (un turno "en 4 días" sigue estando
 | Instituciones y sedes | 1.077 establecimientos reales del REFES (CABA), con las coberturas verificadas de 9 ([08](08-coberturas.md#seed-de-coberturas)). |
 | Especialidades, padrón | 78 especialidades con su profesión (Res. 1814/2015 y 199/2011); 6 fichas de padrón de prueba. |
 | Feedback | 27 opiniones de turnos cumplidos (24 turnos pasados agregados para eso): de ahí salen la valoración de cada profesional y el ranking del admin. Algunas solo con estrellas, otras con criterios. |
-| Usuarios | `admin`, 6 pacientes y 10 profesionales, con la contraseña hasheada (cuentas en `frontend/USUARIOS-DE-PRUEBA.md`). |
+| Usuarios | El administrador, 6 pacientes y 10 profesionales, con la contraseña hasheada (cuentas en `frontend/USUARIOS-DE-PRUEBA.md`). |
 | Profesionales | Lugares, coberturas (obra social entera) y franjas de atención de los mocks. |
 | Turnos, órdenes, recetas, notas, notificaciones | Los de los mocks. |
 | Resultados | 3, con un PDF de ejemplo generado por el seed en `backend/uploads/resultados/` (fuera de git). En este sprint es la única forma de cargar resultados. |
