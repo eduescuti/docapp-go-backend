@@ -2,7 +2,7 @@
 
 Todas las rutas empiezan con `/api`, reciben y devuelven JSON y, salvo las marcadas como **pública**,
 necesitan el header `Authorization: Bearer <token>` (ver [05-sesiones-y-tokens.md](05-sesiones-y-tokens.md)).
-Los status y la forma de los errores están en [02-arquitectura.md](02-arquitectura.md#4-respuestas-y-errores).
+Los status y la forma de los errores están en [02-arquitectura.md](02-arquitectura.md#3-respuestas-y-errores).
 
 ## El verbo es parte del significado
 
