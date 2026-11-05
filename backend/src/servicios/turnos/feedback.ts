@@ -1,18 +1,27 @@
 import type { Feedback, Turno } from "@prisma/client";
 
-import { registrarAccion } from "../auditoria";
-import { prisma } from "../db";
-import { ErrorHttp } from "../errores";
+import { prisma, registrarAccion } from "../../utils/db";
+import { ErrorHttp } from "../../utils/errores";
+import { fechaArgentina } from "../../utils/tiempo";
 import { aTurno, vencerTurnos } from "./turnos";
 
-// Feedback (regla 6): solo de un turno completado, del paciente dueño, una vez por turno. Solo "¿Cómo fue tu
+// Feedback: solo de un turno completado, del paciente dueño, una vez por turno. Solo "¿Cómo fue tu
 // consulta?" (estrellas) es obligatoria; los criterios son opcionales (28/10/2026). Todo de 1 a 5. La valoración
 // de cada profesional se calcula de las estrellas (sin los ocultos por moderación).
 
-const CRITERIOS = ["puntualidad", "atencion", "trato", "claridadExplicacion", "experienciaGeneral"] as const;
-type Criterios = Partial<Record<(typeof CRITERIOS)[number], number>>;
+export const CRITERIOS_FEEDBACK = ["puntualidad", "atencion", "trato", "claridadExplicacion", "experienciaGeneral"] as const;
+type Criterios = Partial<Record<(typeof CRITERIOS_FEEDBACK)[number], number>>;
 
-/** Como `Feedback` del frontend. */
+export interface DatosFeedback {
+  estrellas: number;
+  criterios: Criterios;
+  comentario?: string;
+}
+
+/** Indica si es un entero de 1 a 5. */
+export const esCalificacion = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 5;
+
+/** Convierte un feedback al formato `Feedback` del frontend, sin los criterios que no calificó. */
 function aFeedback(f: Feedback & { turno: Turno }) {
   return {
     id: f.id,
@@ -21,13 +30,12 @@ function aFeedback(f: Feedback & { turno: Turno }) {
     medicoId: f.turno.medicoId,
     estrellas: f.estrellas,
     ...(f.comentario ? { comentario: f.comentario } : {}),
-    // Los criterios que no calificó no viajan (en el frontend son opcionales).
-    criterios: Object.fromEntries(CRITERIOS.map((c) => [c, f[c]]).filter(([, v]) => v !== null)) as Criterios,
-    fecha: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(f.creadoEn),
+    criterios: Object.fromEntries(CRITERIOS_FEEDBACK.map((c) => [c, f[c]]).filter(([, v]) => v !== null)) as Criterios,
+    fecha: fechaArgentina(f.creadoEn),
   };
 }
 
-/** Turnos completados del paciente que todavía no calificó, del más reciente al más viejo. */
+/** Obtiene los turnos completados del paciente que todavía no calificó, del más reciente al más viejo. */
 export async function pendientes(pacienteId: string) {
   await vencerTurnos();
   const turnos = await prisma.turno.findMany({
@@ -37,30 +45,25 @@ export async function pendientes(pacienteId: string) {
   return turnos.map(aTurno);
 }
 
+/** Obtiene las opiniones que dejó el paciente, de la más nueva a la más vieja. */
 export async function enviados(pacienteId: string) {
   const feedbacks = await prisma.feedback.findMany({ where: { turno: { pacienteId } }, include: { turno: true }, orderBy: { creadoEn: "desc" } });
   return feedbacks.map(aFeedback);
 }
 
-export interface DatosFeedback {
-  estrellas: number;
-  criterios: Criterios;
-  comentario?: string;
-}
-
-export const esCalificacion = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 5;
-export const CRITERIOS_FEEDBACK = CRITERIOS;
-
+/** Califica un turno completado del paciente, una sola vez. */
 export async function calificar(pacienteId: string, usuarioId: string, turnoId: string, datos: DatosFeedback) {
   await vencerTurnos();
   const turno = await prisma.turno.findFirst({ where: { id: turnoId, pacienteId }, include: { feedback: true } });
   if (!turno) throw new ErrorHttp(404, "No existe ese turno.");
   if (turno.estado !== "completado") throw new ErrorHttp(400, "Solo podés calificar turnos cumplidos.");
   if (turno.feedback) throw new ErrorHttp(409, "Ya calificaste este turno.");
+
   const feedback = await prisma.feedback.create({
     data: { turnoId, estrellas: datos.estrellas, ...datos.criterios, comentario: datos.comentario?.trim() || null },
     include: { turno: true },
   });
   await registrarAccion({ usuarioId, accion: "feedback", entidad: "turno", entidadId: turnoId });
+
   return aFeedback(feedback);
 }

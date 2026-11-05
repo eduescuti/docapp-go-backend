@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Base de datos DocApp Go</title>
-<meta name="description" content="Diagrama entidad–relación de la base de datos de DocApp Go (Sprint 2): 27 tablas, relaciones, restricciones y reglas de negocio.">
+<meta name="description" content="Diagrama entidad–relación de la base de datos de DocApp Go (Sprint 2): 26 tablas, relaciones, restricciones y reglas de negocio.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -332,7 +332,7 @@
         </div>
         <div class="state-card">
           <h3>Orden <code class="mono" style="font-size:12px">ordenes.estado</code></h3>
-          <p>Pasa a <b>listo</b> cuando el laboratorio carga el primer resultado, en la misma transacción.</p>
+          <p>Pasa a <b>listo</b> cuando llega el primer resultado. Este sprint los resultados vienen del seed.</p>
           <svg viewBox="0 0 520 120" role="img" aria-label="Estados de la orden: pendiente pasa a listo con el primer resultado.">
             <rect class="st-box" x="40" y="40" width="130" height="40" rx="10" style="stroke:var(--m-estudios)"/><text class="st-txt" x="105" y="60">pendiente</text>
             <rect class="st-box" x="350" y="40" width="130" height="40" rx="10"/><text class="st-txt" x="415" y="60">listo</text>
@@ -365,7 +365,7 @@
   const c = (n, t, o = {}) => ({ n, t, ...o });
 
   const MODULOS = [
-    { key: "identidad", nombre: "Identidad y seguridad", desc: "Login por DNI, tokens de sesión, auditoría y claves de terceros." },
+    { key: "identidad", nombre: "Identidad y seguridad", desc: "Login por DNI, tokens de sesión (con el token del teléfono para los push) y auditoría." },
     { key: "pacientes", nombre: "Pacientes", desc: "Datos del paciente, su plan y sus favoritos." },
     { key: "profesionales", nombre: "Profesionales", desc: "Padrón, perfil, especialidades, lugares de atención y notas." },
     { key: "turnos", nombre: "Turnos", desc: "Reservas con estado y combinación única." },
@@ -394,7 +394,8 @@
       c("tokenHash", "TEXT", { uq: true, nota: "SHA-256 del token" }),
       c("creadaEn", "DATETIME", { def: "now()" }), c("expiraEn", "DATETIME"), c("ultimoUsoEn", "DATETIME"),
       c("revocadaEn", "DATETIME", { nul: true }), c("dispositivo", "TEXT", { nul: true }), c("ip", "TEXT", { nul: true }),
-    ], notas: ["El token viaja en cada pedido: Authorization: Bearer.", "Logout o cambio de contraseña → revocadaEn."] },
+      c("fcmToken", "TEXT", { nul: true, nota: "token FCM del teléfono, para los push (29/10/2026)" }),
+    ], notas: ["El token viaja en cada pedido: Authorization: Bearer.", "Logout o cambio de contraseña → revocadaEn.", "Los push van a las sesiones abiertas que tienen fcmToken: al cerrar sesión, ese teléfono deja de recibirlos. Un mismo token queda en una sola sesión."] },
 
     { key: "registro_auditoria", mod: "identidad", desc: "Acciones importantes del sistema (§11).", cols: [
       c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios", nul: true }),
@@ -404,11 +405,11 @@
 
     { key: "notificaciones", mod: "recetas", desc: "Aviso para un usuario de cualquier rol.", cols: [
       c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios" }),
-      c("tipo", "TEXT", { vals: "recordatorio_turno | turno_confirmado | turno_rechazado | turno_cancelado | resultado_disponible | nueva_receta | nueva_orden" }),
+      c("tipo", "TEXT", { vals: "recordatorio_turno | turno_confirmado | turno_rechazado | turno_cancelado | turno_reprogramado | resultado_disponible | nueva_receta | nueva_orden" }),
       c("titulo", "TEXT"), c("mensaje", "TEXT"), c("leida", "BOOLEAN", { def: "false" }),
       c("referenciaTipo", "TEXT", { nul: true, vals: "turno | orden | resultado | receta" }), c("referenciaId", "TEXT", { nul: true }),
       c("creadaEn", "DATETIME", { def: "now()" }),
-    ], notas: ["Las genera el servidor en la misma transacción que el cambio que avisan."] },
+    ], notas: ["Las genera el servidor en la misma transacción que el cambio que avisan; después del commit salen como push (FCM).", "Declarados pero todavía sin generar: recordatorio_turno, turno_reprogramado y resultado_disponible."] },
 
     { key: "profesionales_padron", mod: "profesionales", desc: "Copia del padrón nacional de profesionales de la salud.", cols: [
       c("id", "TEXT", { pk: true }), c("codigoProfesional", "TEXT", { uq: true }),
@@ -429,6 +430,7 @@
 
     { key: "obras_sociales", mod: "cobertura", desc: "Obra social o prepaga. La carga el admin.", cols: [
       c("id", "TEXT", { pk: true }), c("nombre", "TEXT", { uq: true }),
+      c("descripcion", "TEXT", { nul: true, nota: "nombre largo, se muestra en los selectores" }),
       c("registro", "TEXT", { nul: true, vals: "RNAS | RNEMP | otro" }), c("codigoOficial", "TEXT", { nul: true }),
       c("activa", "BOOLEAN", { def: "true" }),
     ] },
@@ -450,7 +452,7 @@
       c("genero", "TEXT", { vals: "femenino | masculino" }),
       c("especialidadId", "TEXT", { fk: "especialidades" }), c("subespecialidadId", "TEXT", { fk: "subespecialidades", nul: true }),
       c("descripcion", "TEXT"), c("aniosExperiencia", "INTEGER", { nul: true }),
-    ], notas: ["Sin horarios de atención (Sprint 2): la disponibilidad la resuelven los turnos.", "La valoración se calcula de feedbacks.", "UNIQUE (matricula, profesion)."] },
+    ], notas: ["El perfil no muestra horarios: la disponibilidad sale de franjas_atencion.", "La valoración se calcula de feedbacks.", "UNIQUE (matricula, profesion)."] },
 
     { key: "especialidades", mod: "profesionales", desc: "Especialidad de una profesión del padrón.", cols: [
       c("id", "TEXT", { pk: true }), c("nombre", "TEXT", { uq: true }),
@@ -549,15 +551,8 @@
       c("institucionId", "TEXT", { fk: "instituciones", nota: "dónde se hizo" }),
       c("tipo", "TEXT"), c("fecha", "TEXT"),
       c("archivoRuta", "TEXT", { uq: true, nota: "en uploads/, nunca público" }), c("archivoBytes", "INTEGER"), c("archivoSha256", "TEXT"),
-      c("claveIntegracionId", "TEXT", { fk: "claves_integracion", nul: true }),
       c("archivadoEl", "TEXT", { nul: true }), c("cargadoEn", "DATETIME", { def: "now()" }),
-    ], notas: ["Los carga un tercero (laboratorio), no el médico ni el admin.", "El aviso \"Nuevo\" del paciente es solo del frontend.", "PDF visible solo para el paciente y el médico de la orden (regla 8)."] },
-
-    { key: "claves_integracion", mod: "identidad", desc: "Credencial del tercero que carga los PDF.", cols: [
-      c("id", "TEXT", { pk: true }), c("institucionId", "TEXT", { fk: "instituciones" }),
-      c("nombre", "TEXT"), c("claveHash", "TEXT", { uq: true }), c("activa", "BOOLEAN", { def: "true" }),
-      c("creadaEn", "DATETIME", { def: "now()" }), c("ultimoUsoEn", "DATETIME", { nul: true }),
-    ], notas: ["Header X-Clave-Integracion. Solo carga resultados de órdenes de su institución."] },
+    ], notas: ["Este sprint vienen del seed (PDF de ejemplo). La carga por un tercero (el laboratorio) y su tabla de claves vuelven con una migración cuando se implemente (se sacaron el 05/11/2026).", "El aviso \"Nuevo\" del paciente es solo del frontend.", "PDF visible solo para el paciente y el médico de la orden (regla 8)."] },
   ];
 
   // Columnas del lienzo: así quedan juntas las tablas que se relacionan más.
@@ -567,7 +562,7 @@
     ["pacientes", "pacientes_medicos_favoritos", "medicos", "especialidades", "subespecialidades"],
     ["notas_paciente", "turnos", "feedbacks", "recetas"],
     ["pacientes_instituciones_favoritas", "instituciones", "sedes", "medicos_sedes", "franjas_atencion", "instituciones_coberturas"],
-    ["ordenes", "orden_estudios", "resultados", "claves_integracion"],
+    ["ordenes", "orden_estudios", "resultados"],
   ];
   const ANCHO = 268, PASO_X = 380, GAP_Y = 34;
 

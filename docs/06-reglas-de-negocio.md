@@ -47,7 +47,7 @@ No puede haber otro turno **activo** (`pendiente` o `confirmado`) con la misma
    los dos pasan el paso 1, el segundo `INSERT` falla con `P2002` → `409`.
 
 ```ts
-// src/servicios/turnos.ts (idea)
+// src/servicios/turnos/turnos.ts (idea)
 export async function reservar(paciente: Paciente, datos: { medicoId: string; sedeId: string; fecha: string; hora: string }) {
   return prisma.$transaction(async (tx) => {
     const medico = await tx.medico.findUnique({ where: { id: datos.medicoId }, include: { lugares: true, coberturas: true } });
@@ -275,8 +275,24 @@ Las genera el servidor cuando pasa algo, en la misma transacción que el cambio:
 | El médico rechaza un turno (o vence sin confirmar: lo avisa el vencimiento automático) | Paciente | `turno_rechazado` |
 | El paciente cancela | Médico | `turno_cancelado` |
 | Se crea una orden | Paciente | `nueva_orden` |
-| Llega un resultado | Paciente | `resultado_disponible` |
 | Se crea una receta | Paciente | `nueva_receta` |
+
+`recordatorio_turno`, `turno_reprogramado` y `resultado_disponible` están declarados pero todavía no se generan: no
+hay recordatorios programados, reprogramar no le avisa al profesional (lo ve en su Agenda) y los resultados vienen del
+seed. Pedir un turno tampoco avisa: el profesional lo ve en su Agenda.
+
+**Push (29/10/2026).** Además de guardarse en `notificaciones` (la lista de la campana), cada aviso llega al teléfono
+con Firebase Cloud Messaging:
+
+- El servicio usa `conAviso()` (`servicios/notificaciones/notificaciones.ts`): hace el cambio y guarda el aviso en
+  la misma transacción y, recién cuando terminó bien, lo manda con `enviarPush()`. Si el cambio se revierte, no sale
+  ningún push. La respuesta al pedido no espera a FCM.
+- Va a cada sesión abierta del usuario que tenga `fcmToken`, a cada teléfono por separado: si uno falla (un token
+  viejo), los demás lo reciben igual y el error queda en la consola. El aviso ya está en la base, así que no se
+  pierde.
+- Un teléfono recibe solo los avisos de quien tiene la sesión abierta ahí: al guardar un token se le saca a cualquier
+  otra sesión que lo tuviera, y al cerrar sesión deja de recibir.
+- El profesional todavía no tiene pantalla de notificaciones en la app: le llegan solo como push.
 
 ## Quién ve qué (regla 8)
 

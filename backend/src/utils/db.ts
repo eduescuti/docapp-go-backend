@@ -1,4 +1,12 @@
-import { prisma } from "./db";
+import { PrismaClient } from "@prisma/client";
+
+// Una sola instancia de Prisma para toda la API: cada `new PrismaClient()` abre su propia conexión.
+export const prisma = new PrismaClient();
+
+/** Hace una consulta mínima: tira un error si no se llega a la base (lo usa /api/health). */
+export async function probarConexion(): Promise<void> {
+  await prisma.$queryRaw`SELECT 1`;
+}
 
 interface Accion {
   usuarioId?: string | null;

@@ -16,6 +16,12 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 > reserva, médico en dos sedes a la misma hora, coberturas con plan de otra obra social, franjas y estados
 > inválidos). La segunda migración (`franjas_media_hora`) suma al trigger de franjas que las horas sean en
 > punto o y media.
+>
+> **Migraciones posteriores:** `obras_sociales_descripcion` y `fotos_perfil` (27/10/2026),
+> `feedback_especialidades_identidad` (28/10/2026), `agregar_fcm_token_sesion` (29/10/2026: `sesiones.fcmToken`
+> para los push) y `quitar_claves_integracion` (05/11/2026: se sacaron `claves_integracion` y
+> `resultados.claveIntegracionId`, que estaban vacías; vuelven con una migración nueva si se implementa la carga de
+> PDF por un tercero). Hoy son **26 tablas**.
 
 ## Convenciones
 
@@ -33,11 +39,11 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 
 ## Módulos y tablas
 
-27 tablas en 8 módulos.
+26 tablas en 8 módulos.
 
 | Módulo | Tablas | Para qué |
 |---|---|---|
-| Identidad y seguridad | `usuarios`, `sesiones`, `registro_auditoria`, `claves_integracion` | Login único por DNI, tokens de sesión, trazabilidad y la clave del tercero que carga PDF. |
+| Identidad y seguridad | `usuarios`, `sesiones`, `registro_auditoria` | Login único por DNI, tokens de sesión y trazabilidad. |
 | Cobertura | `obras_sociales`, `planes_medicos`, `instituciones_coberturas` | Obras sociales y planes (los carga el admin) y qué coberturas acepta cada institución privada. Ver [08-coberturas.md](08-coberturas.md). |
 | Instituciones | `instituciones`, `sedes` | Hospitales, clínicas, centros y laboratorios: nombre + dirección + latitud + longitud. |
 | Pacientes | `pacientes`, `pacientes_medicos_favoritos`, `pacientes_instituciones_favoritas` | Datos del paciente, su plan y sus favoritos. |
@@ -67,7 +73,6 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 | Orden → Estudio pedido | 1 : N | `orden_estudios`, uno por renglón de la orden. |
 | Orden → Resultado | 1 : N | Una orden puede tener varios resultados que llegan en momentos distintos. |
 | Médico / Paciente → Receta | 1 : N | La receta queda siempre asociada a quien la emitió (regla 7). |
-| Institución → Clave de integración → Resultado | 1 : N : N | Qué laboratorio cargó cada PDF. |
 
 ## Cómo se traduce cada regla en la base
 
@@ -194,6 +199,8 @@ model Sesion {
   revocadaEn  DateTime?
   dispositivo String?
   ip          String?
+  /// Token FCM del teléfono de esta sesión, para los push. Un mismo token queda en una sola sesión.
+  fcmToken    String?
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -216,22 +223,6 @@ model RegistroAuditoria {
 
   @@index([usuarioId, creadoEn])
   @@map("registro_auditoria")
-}
-
-/// Clave con la que un tercero (el laboratorio de una institución) carga PDF de resultados.
-model ClaveIntegracion {
-  id            String    @id @default(uuid())
-  institucionId String
-  nombre        String
-  claveHash     String    @unique
-  activa        Boolean   @default(true)
-  creadaEn      DateTime  @default(now())
-  ultimoUsoEn   DateTime?
-
-  institucion Institucion @relation(fields: [institucionId], references: [id])
-  resultados  Resultado[]
-
-  @@map("claves_integracion")
 }
 
 // ───────────── Cobertura ─────────────
@@ -308,12 +299,11 @@ model Institucion {
   activa   Boolean  @default(true)
   creadaEn DateTime @default(now())
 
-  sedes             Sede[]
-  coberturas        InstitucionCobertura[]
-  favoritaDe        PacienteInstitucionFavorita[]
-  ordenes           Orden[]
-  resultados        Resultado[]
-  clavesIntegracion ClaveIntegracion[]
+  sedes      Sede[]
+  coberturas InstitucionCobertura[]
+  favoritaDe PacienteInstitucionFavorita[]
+  ordenes    Orden[]
+  resultados Resultado[]
 
   @@index([origen])
   @@map("instituciones")
@@ -620,27 +610,24 @@ model OrdenEstudio {
 
 /// Resultado: médico (el de la orden) + fecha + hospital + orden + archivo PDF. Sin estado.
 model Resultado {
-  id                 String   @id @default(uuid())
-  ordenId            String
+  id            String   @id @default(uuid())
+  ordenId       String
   /// Dónde se hizo (puede no ser el sugerido en la orden).
-  institucionId      String
+  institucionId String
   /// Nombre del estudio ("Análisis de sangre completo").
-  tipo               String
+  tipo          String
   /// Fecha del estudio "yyyy-MM-dd".
-  fecha              String
+  fecha         String
   /// Ruta dentro de uploads/. Nunca se sirve como archivo estático: solo por GET autorizado.
-  archivoRuta        String   @unique
-  archivoBytes       Int
-  archivoSha256      String
-  /// Quién lo cargó (el tercero). Null si se cargó con el seed.
-  claveIntegracionId String?
+  archivoRuta   String   @unique
+  archivoBytes  Int
+  archivoSha256 String
   /// "yyyy-MM-dd" en que el paciente lo archivó; null = no archivado.
-  archivadoEl        String?
-  cargadoEn          DateTime @default(now())
+  archivadoEl   String?
+  cargadoEn     DateTime @default(now())
 
-  orden            Orden             @relation(fields: [ordenId], references: [id])
-  institucion      Institucion       @relation(fields: [institucionId], references: [id])
-  claveIntegracion ClaveIntegracion? @relation(fields: [claveIntegracionId], references: [id])
+  orden       Orden       @relation(fields: [ordenId], references: [id])
+  institucion Institucion @relation(fields: [institucionId], references: [id])
 
   @@index([ordenId])
   @@map("resultados")
@@ -889,4 +876,5 @@ seed las corre a la fecha en que se ejecuta (un turno "en 4 días" sigue estando
 | `planes_medicos` sueltos | `obras_sociales` → `planes_medicos` | El admin carga obras sociales; el filtro es por plan. |
 | `medicos.avatarUrl` (URL externa) | `usuarios.fotoArchivo` (27/10/2026) | Pacientes y profesionales suben su foto desde el Perfil; se guarda como archivo en el servidor. |
 | `instituciones_planes`, `medicos_planes` (por plan) | `instituciones_coberturas`, `medicos_coberturas`: obra social + plan opcional, con fuente y fecha | Las fuentes reales informan por obra social y a veces por plan (27/10/2026, [08](08-coberturas.md)). |
-| — | `profesionales_padron`, `notas_paciente`, `claves_integracion` | Registro de profesionales contra el padrón, notas privadas y carga de PDF por terceros. |
+| — | `profesionales_padron`, `notas_paciente` | Registro de profesionales contra el padrón y notas privadas. |
+| — | `sesiones.fcmToken` (29/10/2026) | Las notificaciones también llegan como push al teléfono de cada sesión abierta. |

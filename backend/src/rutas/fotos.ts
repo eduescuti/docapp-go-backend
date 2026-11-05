@@ -1,19 +1,19 @@
 import express, { Router } from "express";
 
-import { ErrorHttp } from "../errores";
-import { autenticar, usuarioDe } from "../middlewares/autenticar";
-import { requerirRol } from "../middlewares/requerirRol";
-import * as fotos from "../servicios/fotos";
-import { cuerpo } from "../validacion";
+import { autenticar, requerirRol, usuarioDe } from "../middlewares/autenticar";
+import * as servicio from "../servicios/usuarios/fotos";
+import { ErrorHttp } from "../utils/errores";
+import { cuerpo } from "../utils/validacion";
 
-/** Fotos de perfil. Se montan en /api. */
-export const rutasFotos = Router();
+/** Fotos de perfil: subir o quitar la propia (`fotoDePerfil`) y servir la imagen (`fotos`). */
+export const fotoDePerfil = Router();
+export const fotos = Router();
 
 /**
  * La foto viaja en base64 dentro del JSON (un tercio más que la imagen) y supera el límite general de 100 kb: su
  * ruta tiene este parser propio, que se monta antes que el general en index.ts.
  */
-export const parserFoto = express.json({ limit: Math.ceil((fotos.TAMANO_MAXIMO_FOTO * 4) / 3) + 1024 });
+export const parserFoto = express.json({ limit: Math.ceil((servicio.TAMANO_MAXIMO_FOTO * 4) / 3) + 1024 });
 
 /** La imagen del body: base64, con o sin el prefijo "data:image/...;base64," que arma la versión web. */
 function imagenDelCuerpo(datos: Record<string, unknown>): Buffer {
@@ -25,21 +25,21 @@ function imagenDelCuerpo(datos: Record<string, unknown>): Buffer {
 }
 
 // PUT /api/usuarios/yo/foto { imagen } (JPG o PNG en base64) → { avatarUrl }. Reemplaza la anterior.
-rutasFotos.put("/usuarios/yo/foto", autenticar, requerirRol("paciente", "doctor"), async (req, res) => {
+fotoDePerfil.put("/", autenticar, requerirRol("paciente", "doctor"), async (req, res) => {
   const imagen = imagenDelCuerpo(cuerpo(req.body));
-  res.json({ avatarUrl: await fotos.guardarFoto(usuarioDe(req).id, imagen, req.ip ?? "") });
+  res.json({ avatarUrl: await servicio.guardarFoto(usuarioDe(req).id, imagen, req.ip ?? "") });
 });
 
 // DELETE /api/usuarios/yo/foto → 204 (vuelven a verse las iniciales).
-rutasFotos.delete("/usuarios/yo/foto", autenticar, requerirRol("paciente", "doctor"), async (req, res) => {
-  await fotos.quitarFoto(usuarioDe(req).id, req.ip ?? "");
+fotoDePerfil.delete("/", autenticar, requerirRol("paciente", "doctor"), async (req, res) => {
+  await servicio.quitarFoto(usuarioDe(req).id, req.ip ?? "");
   res.status(204).end();
 });
 
 // GET /api/fotos/:archivo → la imagen. Sin token: la URL no se puede adivinar y cambia con cada foto, por eso
 // se puede guardar en caché para siempre.
-rutasFotos.get("/fotos/:archivo", async (req, res) => {
-  const { ruta, tipo } = await fotos.archivoDeFoto(req.params.archivo);
+fotos.get("/:archivo", async (req, res) => {
+  const { ruta, tipo } = await servicio.archivoDeFoto(req.params.archivo);
   res.set({ "Content-Type": tipo, "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
   res.sendFile(ruta);
 });

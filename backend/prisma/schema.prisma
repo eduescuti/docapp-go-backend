@@ -84,22 +84,6 @@ model RegistroAuditoria {
   @@map("registro_auditoria")
 }
 
-/// Clave con la que un tercero (el laboratorio de una institución) carga PDF de resultados.
-model ClaveIntegracion {
-  id            String    @id @default(uuid())
-  institucionId String
-  nombre        String
-  claveHash     String    @unique
-  activa        Boolean   @default(true)
-  creadaEn      DateTime  @default(now())
-  ultimoUsoEn   DateTime?
-
-  institucion Institucion @relation(fields: [institucionId], references: [id])
-  resultados  Resultado[]
-
-  @@map("claves_integracion")
-}
-
 // ───────────── Cobertura ─────────────
 
 /// Obra social o prepaga ("OSDE"). La carga el admin.
@@ -174,12 +158,11 @@ model Institucion {
   activa   Boolean  @default(true)
   creadaEn DateTime @default(now())
 
-  sedes             Sede[]
-  coberturas        InstitucionCobertura[]
-  favoritaDe        PacienteInstitucionFavorita[]
-  ordenes           Orden[]
-  resultados        Resultado[]
-  clavesIntegracion ClaveIntegracion[]
+  sedes      Sede[]
+  coberturas InstitucionCobertura[]
+  favoritaDe PacienteInstitucionFavorita[]
+  ordenes    Orden[]
+  resultados Resultado[]
 
   @@index([origen])
   @@map("instituciones")
@@ -486,27 +469,24 @@ model OrdenEstudio {
 
 /// Resultado: médico (el de la orden) + fecha + hospital + orden + archivo PDF. Sin estado.
 model Resultado {
-  id                 String   @id @default(uuid())
-  ordenId            String
+  id            String   @id @default(uuid())
+  ordenId       String
   /// Dónde se hizo (puede no ser el sugerido en la orden).
-  institucionId      String
+  institucionId String
   /// Nombre del estudio ("Análisis de sangre completo").
-  tipo               String
+  tipo          String
   /// Fecha del estudio "yyyy-MM-dd".
-  fecha              String
+  fecha         String
   /// Ruta dentro de uploads/. Nunca se sirve como archivo estático: solo por GET autorizado.
-  archivoRuta        String   @unique
-  archivoBytes       Int
-  archivoSha256      String
-  /// Quién lo cargó (el tercero). Null si se cargó con el seed.
-  claveIntegracionId String?
+  archivoRuta   String   @unique
+  archivoBytes  Int
+  archivoSha256 String
   /// "yyyy-MM-dd" en que el paciente lo archivó; null = no archivado.
-  archivadoEl        String?
-  cargadoEn          DateTime @default(now())
+  archivadoEl   String?
+  cargadoEn     DateTime @default(now())
 
-  orden            Orden             @relation(fields: [ordenId], references: [id])
-  institucion      Institucion       @relation(fields: [institucionId], references: [id])
-  claveIntegracion ClaveIntegracion? @relation(fields: [claveIntegracionId], references: [id])
+  orden       Orden       @relation(fields: [ordenId], references: [id])
+  institucion Institucion @relation(fields: [institucionId], references: [id])
 
   @@index([ordenId])
   @@map("resultados")

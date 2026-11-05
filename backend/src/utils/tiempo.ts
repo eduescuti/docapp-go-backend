@@ -17,8 +17,17 @@ function partes(fecha: Date) {
   return { dia: `${valor("year")}-${valor("month")}-${valor("day")}`, hora: `${valor("hour")}:${valor("minute")}` };
 }
 
+/** La fecha de ese momento en Argentina: "2026-10-27". */
+export const fechaArgentina = (fecha: Date): string => partes(fecha).dia;
+
+/** La fecha y hora de ese momento en Argentina: "2026-10-27T14:30" (como las fechas con hora del frontend). */
+export function fechaHoraArgentina(fecha: Date): string {
+  const { dia, hora } = partes(fecha);
+  return `${dia}T${hora}`;
+}
+
 /** "2026-10-27" */
-export const hoyArgentina = (): string => partes(new Date()).dia;
+export const hoyArgentina = (): string => fechaArgentina(new Date());
 
 /** "2026-10-27 14:30", para comparar con `${fecha} ${hora}` de un turno. */
 export function ahoraArgentina(): string {

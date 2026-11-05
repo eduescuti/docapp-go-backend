@@ -16,10 +16,12 @@
 | Base de datos | SQLite (`prisma/dev.db`) | Sin servidor aparte, alcanza para el TP. Si después se pasa a PostgreSQL, cambia el `provider` del schema y no la app. |
 | CORS y `.env` | `cors`, `dotenv` | Como en la práctica. |
 | Criptografía | `node:crypto` | `scrypt` para contraseñas, `randomBytes` para tokens, `createHash` para guardarlos hasheados. Sin `bcrypt` ni `jsonwebtoken`. |
+| Notificaciones push | `firebase-admin` (Firebase Cloud Messaging) | Lleva cada aviso al teléfono. Solo entrega: las notificaciones se guardan en nuestra base (29/10/2026). |
 
-Dependencias: `express`, `cors`, `dotenv`, `@prisma/client`; de desarrollo `prisma`, `typescript`,
-`ts-node`, `ts-node-dev`, `@types/express`, `@types/cors`, `@types/node`. Las mismas que la práctica,
-menos `sqlite3` (Prisma ya trae su motor y las tablas no se crean a mano).
+Dependencias: `express`, `cors`, `dotenv`, `@prisma/client`, `firebase-admin`; de desarrollo `prisma`,
+`typescript`, `ts-node`, `ts-node-dev`, `@types/express`, `@types/cors`, `@types/node`. Las mismas que la
+práctica, menos `sqlite3` (Prisma ya trae su motor y las tablas no se crean a mano), más `firebase-admin` para
+los push.
 
 ## Capas
 
@@ -32,12 +34,12 @@ App (Expo)  ──HTTP + JSON──▶  Express  ──▶  Rutas  ──▶  Se
 ```
 
 - **El celular nunca toca la base.** Pide datos a la API; la API decide.
-- **Middlewares** (`middlewares/*.ts`): `autenticar` (token → `req.usuario`), `requerirRol(...)`, límite
-  de intentos de login y el manejador de errores al final de todo.
+- **Middlewares** (`middlewares/autenticar.ts`): `autenticar` (token → `req.usuario`) y `requerirRol(...)`. El
+  manejador de errores, que va al final de todo, está en `utils/errores.ts`.
 - **Rutas** (`rutas/*.ts`, un `express.Router()` por recurso): leen parámetros y body, toman solo los
   campos que esperan (como el `pick` de la práctica), validan formato, llaman a un servicio y responden.
   No tienen reglas de negocio.
-- **Servicios** (`servicios/*.ts`): las reglas del dominio (unicidad de turnos, franjas, cobertura, quién
+- **Servicios** (`servicios/<tema>/*.ts`): las reglas del dominio (unicidad de turnos, franjas, cobertura, quién
   puede confirmar, vencimiento). No saben nada de HTTP: tiran `ErrorHttp` y el manejador de errores lo
   traduce.
 - **Prisma**: consultas. Lo que la base puede garantizar sola (claves foráneas, `UNIQUE`, índices
@@ -49,7 +51,8 @@ App (Expo)  ──HTTP + JSON──▶  Express  ──▶  Rutas  ──▶  Se
 backend/
   package.json
   tsconfig.json             # el de la práctica (ES2022, NodeNext, strict, outDir dist, rootDir src)
-  .env.example              # PORT, DATABASE_URL, DIAS_SESION_INACTIVA, ORIGEN_PERMITIDO (el .env no se commitea)
+  .env.example              # PORT, DATABASE_URL, DIAS_SESION_INACTIVA, ORIGEN_PERMITIDO, SECRETO_IDENTIDAD (el .env no se commitea)
+  notificaciondocapp-firebase-adminsdk-….json   # credenciales de Firebase para los push (fuera de git; sin él no arranca)
   prisma/
     schema.prisma           # el modelo de 03-base-de-datos.md
     migrations/             # generadas por prisma migrate (la primera suma a mano los índices parciales y triggers)
@@ -57,19 +60,28 @@ backend/
     datos/fotos/            # fotos de perfil de ejemplo del seed (<medicoId>.jpg)
     dev.db                  # la base (fuera de git)
   src/
-    index.ts                # crea la app: cors, express.json, rutas, manejador de errores, listen(PORT)
-    db.ts                   # una sola instancia de PrismaClient
-    errores.ts              # clase ErrorHttp(status, mensaje)
+    index.ts                # la API: cors, express.json, rutas, manejador de errores, listen(PORT) (npm run dev)
+    seed.ts                 # otro programa, aparte de la API: borra la base y carga los datos de prueba, con sus PDF (npm run db:seed)
+    utils/                  # lo que usa todo el backend
+      db.ts                 # una sola instancia de PrismaClient y registrarAccion (registro de auditoría)
+      errores.ts            # clase ErrorHttp(status, mensaje) y manejador de errores: { error }, lo inesperado → 500
+      validacion.ts         # forma de los datos que llegan (texto, contraseña, DNI)
+      tiempo.ts             # fechas y horas en hora argentina
     middlewares/
-      autenticar.ts         # Authorization: Bearer → req.usuario (y renueva el vencimiento)
-      requerirRol.ts
-      limiteLogin.ts        # intentos fallidos por DNI e IP
-      manejarErrores.ts     # ErrorHttp y errores de Prisma → { error }, el resto → 500
-    auth/
-      contrasenas.ts        # hashear / verificar con scrypt
-      sesiones.ts           # crear token, validarlo, revocarlo
-    rutas/                  # auth, planes, instituciones, medicos, pacientes, turnos, ordenes, resultados, recetas, admin
-    servicios/              # reglas de negocio por módulo
+      autenticar.ts         # Bearer → req.usuario (y el tipo de req.usuario), requerirRol(...), pacienteIdDe y medicoIdDe
+    rutas/
+      index.ts              # el mapa de la API: un prefijo por router
+                            # auth, catalogos, pacientes, medicos, turnos, instituciones (y sedes),
+                            # estudios (ordenes, resultados y recetas), fotos, notificaciones, admin
+    servicios/              # reglas de negocio, con los mismos temas que services/ del frontend
+      formato.ts            # filas de la base → la forma que espera el frontend, y piezas que comparten los servicios
+      sesion/               # auth (login, registros, límite de intentos), sesiones, contrasenas, identidad, refeps
+      usuarios/             # pacientes, medicos, notas (y vínculo por turnos), fotos
+      turnos/               # turnos, disponibilidad (franjas y horarios libres), feedback
+      historialMedico/      # estudios, recetas
+      catalogos/            # catalogos, instituciones, cobertura (qué ve cada plan)
+      notificaciones/       # notificaciones: aviso en la base + push con FCM (conAviso, enviarPush)
+      admin/                # admin
   uploads/                  # fuera de git
     resultados/             # PDF de resultados (datos médicos: solo por GET autorizado)
     fotos/                  # fotos de perfil (<uuid>.jpg; ver 06-reglas-de-negocio.md, "Fotos de perfil")
@@ -83,10 +95,10 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 
-import { manejarErrores } from "./middlewares/manejarErrores";
-import { rutasAuth } from "./rutas/auth";
-import { rutasTurnos } from "./rutas/turnos";
-// ...el resto de las rutas
+import { manejarErrores } from "./utils/errores";
+import { api } from "./rutas";
+import { parserFoto } from "./rutas/fotos";
+import { limpiarSesionesViejas } from "./servicios/sesion/sesiones";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -97,12 +109,8 @@ app.use(cors({ origin: process.env.ORIGEN_PERMITIDO }));
 app.use("/api/usuarios/yo/foto", parserFoto);
 app.use(express.json({ limit: "100kb" }));
 
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
-});
-app.use("/api/auth", rutasAuth);
-app.use("/api/turnos", rutasTurnos);
-// ...
+// Todas las rutas: el mapa está en rutas/index.ts.
+app.use("/api", api);
 
 // Al final: lo que no encontró ruta y los errores.
 app.use((_req, res) => {
@@ -112,8 +120,55 @@ app.use(manejarErrores);
 
 app.listen(port, () => {
   console.log(`API escuchando en http://localhost:${port}`);
+  // Al arrancar, borra las sesiones vencidas o revocadas hace más de 30 días.
+  limpiarSesionesViejas().then((n) => n > 0 && console.log(`Se borraron ${n} sesiones vencidas.`));
 });
 ```
+
+## `src/rutas/index.ts`: el mapa de la API
+
+Cada router se crea con `Router()` en su archivo y acá se le pone el prefijo. La URL final es `/api` + prefijo +
+ruta interna: `api.use("/auth", auth)` junto con `auth.post("/login", ...)` es `POST /api/auth/login`.
+
+```ts
+export const api = Router();
+
+api.use("/auth", auth);
+api.use("/catalogos", catalogos);
+api.use("/pacientes", pacientes);
+// ...
+```
+
+Las rutas no usan Prisma: siempre pasan por un servicio (ruta → servicio → Prisma).
+
+## Cómo está escrito un servicio (05/11/2026)
+
+Los servicios se reescribieron para que se lean más fácil. Se comparó la versión vieja y la nueva con los mismos 242
+pedidos (lecturas, escrituras y errores de los tres roles) sobre copias de la base, y las respuestas son iguales salvo
+dos cambios buscados:
+
+- La `especialidad` que va dentro de turnos y recetas (`TurnoConDetalle`, `RecetaConDetalle`) ahora trae también
+  `profesion`, como pide el tipo `Especialidad` del frontend.
+- El push se manda a cada teléfono del usuario por separado: antes, si fallaba uno (un token viejo), los siguientes
+  no lo recibían.
+
+- **Cada función tiene una descripción corta que empieza con el verbo de lo que hace** ("Obtiene…", "Valida…",
+  "Crea…", "Convierte…"). Sin comentarios dentro de las funciones: lo que hacía falta explicar está en la
+  descripción.
+- **Espacios entre bloques**: validar → consultar → guardar → devolver.
+- **Consultas que no dependen una de otra van juntas** con `Promise.all` (el detalle de los turnos, las métricas, los
+  lugares del profesional, la orden nueva).
+- **Lo que se repetía está en un solo lugar:**
+
+| Pieza | Dónde | Para qué |
+|---|---|---|
+| `nombreProfesional`, `PROFESIONAL_PARA_AVISO` | `formato.ts` | "La Dra. Ana Pérez" / "El Dr. …" en el texto de los avisos, y los campos que hacen falta para armarlo. |
+| `aEspecialidad`, `INCLUIR_ESPECIALIDAD` | `formato.ts` | La especialidad como la espera el frontend (con `profesion` y sus subespecialidades), igual en catálogos, turnos y recetas. |
+| `sinNulos` | `formato.ts` | Saca los campos `null` (en el frontend los opcionales son `?:`). |
+| `conAviso` | `notificaciones/notificaciones.ts` | Hace un cambio y guarda su aviso en la misma transacción; si sale bien, manda el push. La usan cancelar, confirmar y rechazar un turno, crear una orden y crear una receta. |
+| `exigirPlanActivo` | `catalogos/cobertura.ts` | El plan existe y está activo (registro del paciente y cambio de plan). |
+| `coincideProfesion` | `sesion/refeps.ts` | Compara profesiones del padrón ("Médico" y "Médico cirujano"). |
+| `TIPOS_INSTITUCION` | `catalogos/instituciones.ts` | Los tipos válidos, para el mapa y para el alta del admin. |
 
 ## Lo que Express no trae y hay que resolver a mano
 
@@ -171,7 +226,12 @@ PORT=3000
 DATABASE_URL="file:./dev.db"
 DIAS_SESION_INACTIVA=90
 ORIGEN_PERMITIDO=http://localhost:8081
+SECRETO_IDENTIDAD=        # clave del HMAC del número de trámite del DNI (sin ella, el registro responde 500)
 ```
+
+Además, las credenciales de Firebase (para los push) son un JSON en `backend/`, fuera de git. El servidor lo lee al
+arrancar: **sin ese archivo no arranca**. Se baja de la consola de Firebase (Configuración del proyecto → Cuentas de
+servicio → Generar nueva clave privada) y no se comparte.
 
 ### 6. Fechas y horas
 

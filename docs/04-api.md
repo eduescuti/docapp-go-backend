@@ -23,7 +23,7 @@ servidor de la sesión. Así nadie puede pedir los turnos de otro cambiando un n
 
 | Rol | Rutas |
 |---|---|
-| Pública | `GET /api/health`, `POST /api/auth/login`, registro, `GET /api/planes`, `GET /api/especialidades`, `GET /api/fotos/:archivo` (la URL no se puede adivinar: ver Fotos de perfil) |
+| Pública | `GET /api/health`, `POST /api/auth/login`, registro, `GET /api/catalogos/planes`, `GET /api/catalogos/especialidades`, `GET /api/fotos/:archivo` (la URL no se puede adivinar: ver Fotos de perfil) |
 | Paciente | `/api/pacientes/yo/...`, reservar y cancelar turnos, archivar lo suyo, ver sus PDF, feedback |
 | Profesional | `/api/medicos/yo/...`, confirmar / rechazar sus turnos, crear órdenes y recetas para sus pacientes |
 | Admin | `/api/admin/...` |
@@ -38,7 +38,7 @@ servidor de la sesión. Así nadie puede pedir los turnos de otro cambiando un n
 | `GET` | `/api/health` | pública | — | `200 { ok: true }` |
 | `POST` | `/api/auth/login` | pública | `{ dni, password }` | `200 { token, expiraEn, sesion }` · `400` DNI que no tiene 7 u 8 dígitos · `401` · `429` |
 | `POST` | `/api/auth/logout` | todos | — | `204` (revoca el token) |
-| `GET` | `/api/sesion` | todos | — | `200 sesion` (la misma forma que `Sesion` del frontend) |
+| `GET` | `/api/auth/sesion` | todos | — | `200 sesion` (la misma forma que `Sesion` del frontend) |
 | `POST` | `/api/auth/registro/dni` | pública | `{ codigo }` (texto del PDF417 del DNI) | `200 { dni, nombre, apellido }` · `400` si no es un código de DNI · `409` si ese DNI (número o ejemplar) ya tiene cuenta. No guarda nada ([06](06-reglas-de-negocio.md#verificación-de-identidad-del-registro)). |
 | `POST` | `/api/auth/registro/paciente` | pública | `{ codigoDni, password, planMedicoId }` | `201 { token, expiraEn, sesion }` · `409` si el DNI ya existe. DNI, nombre y apellido salen del código del DNI. |
 | `POST` | `/api/auth/registro/profesional/verificar` | pública | `{ dni, matricula, profesion }` | `200 fichaPadron` · `404` si la terna no está en el padrón o la matrícula no está habilitada · `409` si el DNI ya tiene cuenta. Busca primero en la copia local del padrón (ahí están las fichas de prueba) y, si no está, en el buscador nacional REFEPS en línea (6 s como mucho). |
@@ -49,20 +49,20 @@ servidor de la sesión. Así nadie puede pedir los turnos de otro cambiando un n
 
 | Método | Ruta | Rol | Respuesta |
 |---|---|---|---|
-| `GET` | `/api/planes` | pública | Obras sociales con sus planes (el registro elige obra social y después plan). |
-| `GET` | `/api/especialidades` | pública | Especialidades con su `profesion` y los nombres de sus subespecialidades. |
-| `GET` | `/api/profesiones` | pública | Profesiones del padrón (selector del registro de profesional). |
+| `GET` | `/api/catalogos/planes` | pública | Obras sociales con sus planes (el registro elige obra social y después plan). |
+| `GET` | `/api/catalogos/especialidades` | pública | Especialidades con su `profesion` y los nombres de sus subespecialidades. |
+| `GET` | `/api/catalogos/profesiones` | pública | Profesiones del padrón (selector del registro de profesional). |
 
 ### Instituciones (hospitales)
 
 | Método | Ruta | Rol | Body / query | Respuesta |
 |---|---|---|---|---|
-| `GET` | `/api/instituciones` | paciente | `?tipos=hospital,laboratorio&lat=&lng=&radioKm=&limite=&sedes=` | `[{ institucion, sede, distanciaKm?, motivo }]` (`CentroCercano`). Con `sedes`, solo esas sedes (el mapa de la reserva). Solo las que puede usar: públicas + privadas que aceptan **su** plan (el plan sale de la sesión, no de la query). Ordenadas por distancia si hay `lat/lng`. Cada una con `coberturas` y `fuenteCoberturas: { fuente, fuenteUrl?, verificadoEl }` (la de sus filas de cobertura; la tarjeta del mapa la muestra). |
+| `GET` | `/api/instituciones` | paciente | `?tipos=hospital,laboratorio&lat=&lng=&sedes=` | `[{ institucion, sede, distanciaKm?, motivo }]` (`CentroCercano`). Con `sedes`, solo esas sedes (el mapa de la reserva). Solo las que puede usar: públicas + privadas que aceptan **su** plan (el plan sale de la sesión, no de la query). Ordenadas por distancia si hay `lat/lng`. Cada una con `coberturas` y `fuenteCoberturas: { fuente, fuenteUrl?, verificadoEl }` (la de sus filas de cobertura; la tarjeta del mapa la muestra). |
 | `GET` | `/api/instituciones/:id` | todos | — | Institución con sedes y coberturas. |
 | `GET` | `/api/sedes` | todos | `?ids=a,b` | `[{ sede, institucion }]` en ese orden (lugares de atención). |
 | `GET` | `/api/sedes/buscar` | todos | `?q=` | Hasta 30 lugares cuyo nombre o dirección contiene el texto (sin tildes). El profesional elige así dónde atiende: a él solo le aparecen los públicos y los que aceptan alguna de sus coberturas. |
 | `POST` | `/api/admin/instituciones` | admin | `{ nombre, tipo, origen, direccion, ciudad, latitud, longitud, telefono?, coberturas, fuente, fuenteUrl?, verificadoEl }` | `201` institución con su sede. Si es pública, `coberturas` puede ir vacío. |
-| `GET` | `/api/admin/instituciones` | admin | `?q=` | Todas (públicas y privadas) con `coberturas` y `fuenteCoberturas`, buscando por nombre sin tildes; primero las que tienen coberturas. Es la lista de Admin → Instituciones. |
+| `GET` | `/api/admin/instituciones` | admin | — | Todas (públicas y privadas) con `coberturas` y `fuenteCoberturas`; primero las que tienen coberturas. Es la lista de Admin → Instituciones (su buscador filtra por nombre en la app). |
 | `GET` | `/api/admin/instituciones/:id/coberturas` | admin | — | Sus coberturas con fuente y fecha. |
 | `PUT` | `/api/admin/instituciones/:id/coberturas` | admin | `{ coberturas, fuente, fuenteUrl?, verificadoEl }` | `200` (reemplaza la lista). `coberturas` es `{ obraSocialId, planesIds? }[]`: sin `planesIds` = todos los planes ([08](08-coberturas.md#api)). |
 
@@ -76,7 +76,7 @@ servidor de la sesión. Así nadie puede pedir los turnos de otro cambiando un n
 
 | Método | Ruta | Rol | Query | Respuesta |
 |---|---|---|---|---|
-| `GET` | `/api/medicos` | paciente | `?especialidad=&sede=&q=` | Solo los que atienden su cobertura (regla 1: su obra social entera o su plan) y esa especialidad (regla 2). |
+| `GET` | `/api/medicos` | paciente | `?sede=` | Solo los que atienden su cobertura (regla 1: su obra social entera o su plan); con `sede`, solo los que atienden ahí (tarjeta del mapa). No hay buscador de médicos: la reserva los pide todos y el profesional sale de fecha, horario, lugar y especialidad (regla 2). |
 | `GET` | `/api/medicos/:id` | todos | — | Perfil público con valoración calculada. |
 | `GET` | `/api/medicos/yo` | profesional | — | Perfil: datos del registro + lugares de atención + coberturas que atiende. **Sin horarios.** |
 | `PUT` | `/api/medicos/yo/lugares` | profesional | `{ sedeIds }` | `200` (sus lugares de atención). |
@@ -115,14 +115,14 @@ El body de la foto pesa más que el límite general de 100 kb: `index.ts` monta 
 | `GET` | `/api/turnos/dias-con-turnos` | paciente | `?desde=&hasta=&medicos=` | `["2026-11-02", …]` |
 | `POST` | `/api/turnos` | paciente | `{ fecha, hora, sedeId, especialidadId, medicoId }` (los 5 pasos) | `201` turno **`pendiente`** · `400` si la especialidad no es la del profesional · `409` si la combinación ya está tomada o el médico ya tiene un turno a esa hora · `400` si el horario no está en sus franjas, o si la sede o el profesional no le corresponden por su cobertura. |
 | `POST` | `/api/turnos/:id/reprogramar` | paciente dueño | `{ sedeId, fecha, hora }` (mismo profesional) | `201` turno nuevo **`pendiente`** con `reprogramadoDesdeId`; el viejo queda `cancelado`, en una sola transacción · `409` si faltan menos de 24 h o el nuevo horario está tomado. |
-| `GET` | `/api/pacientes/yo/turnos` | paciente | — | `{ proximos, historial }` con médico, especialidad, sede e institución resueltos (`TurnoConDetalle`). |
+| `GET` | `/api/pacientes/yo/turnos` | paciente | — | `{ proximos, historial }` con médico, especialidad (con su `profesion` y subespecialidades), sede e institución resueltos (`TurnoConDetalle`). |
 | `GET` | `/api/pacientes/yo/turnos/proximo` | paciente | — | El próximo confirmado o pendiente (Inicio), o `null`. |
 | `GET` | `/api/pacientes/yo/turnos/todos` | paciente | — | Todos sus turnos (`Turno[]`), también los que sacó del historial: su historial médico y el feedback no cambian. |
 | `PATCH` | `/api/turnos/:id` | paciente dueño | `{ estado: "cancelado" }` | `200` · `409` si faltan menos de 24 h, ya pasó o no está activo. |
 | `PATCH` | `/api/turnos/:id` | profesional del turno | `{ estado: "confirmado" \| "rechazado" }` | `200` · `409` si ya no está `pendiente`. |
 | `PATCH` | `/api/turnos/:id` | paciente dueño | `{ ocultoEnHistorial: true }` | `200` ("Eliminar del historial"). |
 | `DELETE` | `/api/pacientes/yo/turnos/historial` | paciente | — | `204` ("Eliminar todo": oculta todo el historial). |
-| `GET` | `/api/medicos/yo/agenda` | profesional | `?desde=2026-10-01&hasta=2026-10-31` | Turnos del rango con paciente, sede e institución (`TurnoDeAgenda`). Inicio y Agenda. |
+| `GET` | `/api/medicos/yo/agenda` | profesional | — | Todos sus turnos (pasados y futuros) con paciente, sede e institución (`TurnoDeAgenda`). Inicio, Agenda y la ficha del paciente. |
 | `GET` | `/api/medicos/yo/franjas` | profesional | — | Sus franjas `[{ id, sedeId, diaSemana, desde, hasta }]`. |
 | `PUT` | `/api/medicos/yo/franjas` | profesional | `{ franjas: [{ sedeId, diaSemana, desde, hasta }] }` | `200` (reemplaza todas) · `400` si una sede no es de sus lugares, si `desde`/`hasta` no son múltiplos de 30 min o si dos franjas del mismo día se pisan. Los turnos ya tomados no se tocan. |
 
@@ -157,15 +157,15 @@ profesional). Todos piden **vínculo por turnos**: si el profesional no tiene ni
 | `POST` | `/api/integracion/ordenes/:ordenId/resultados` | tercero | Body: el PDF (`Content-Type: application/pdf`, máx. 10 MB, con `express.raw`). Query: `?tipo=&fecha=`. Header `X-Clave-Integracion`. | `201` resultado. Si la orden estaba `pendiente`, pasa a `listo`. **Fuera de este sprint.** |
 
 **En este sprint los resultados vienen solo del seed** (decidido el 27/10/2026): el endpoint de
-integración queda documentado para más adelante y la tabla `claves_integracion` ya existe para no tener
-que migrar después.
+integración queda documentado para más adelante. La tabla `claves_integracion` se sacó el 05/11/2026 porque
+no se usaba: se crea con una migración cuando se implemente.
 
 ### Recetas
 
 | Método | Ruta | Rol | Body / query | Respuesta |
 |---|---|---|---|---|
 | `POST` | `/api/recetas` | profesional | `{ pacienteId, medicacion, dosis, frecuencia, duracionDias, indicaciones? }` | `201` receta con `vigenteHasta = hoy + duracionDias`. |
-| `GET` | `/api/pacientes/yo/recetas` | paciente | — | `{ activas, pasadas, archivadas }` con médico y especialidad (`RecetaConDetalle`; las archivadas en una lista, la app arma las carpetas). Cada receta lleva `estado: "activa" \| "pasada"` **calculado**. |
+| `GET` | `/api/pacientes/yo/recetas` | paciente | — | `{ activas, pasadas, archivadas }` con médico y su especialidad, con `profesion` y subespecialidades (`RecetaConDetalle`; las archivadas en una lista, la app arma las carpetas). Cada receta lleva `estado: "activa" \| "pasada"` **calculado**. |
 | `GET` | `/api/pacientes/yo/recetas/todas` | paciente | — | Todas sus recetas, archivadas o no (historial médico). |
 | `PATCH` | `/api/recetas/:id` | paciente dueño | `{ archivada: true \| false }` | `200` · `409` si la receta todavía está activa. |
 
@@ -177,8 +177,9 @@ que migrar después.
 | `GET` | `/api/pacientes/yo/feedback` | paciente | — | Las calificaciones que ya dejó. |
 | `POST` | `/api/turnos/:id/feedback` | paciente dueño | `{ estrellas, criterios?: {…}, comentario? }`: solo `estrellas` es obligatoria; cada criterio que venga, de 1 a 5 | `201` · `409` si ya se calificó · `400` si el turno no está completado. |
 | `GET` | `/api/notificaciones` | todos | — | Las del usuario, de la más nueva a la más vieja (hasta 100). |
-| `PATCH` | `/api/notificaciones/:id` | dueño | `{ leida: true }` | `204` |
-| `PATCH` | `/api/notificaciones` | todos | `{ leida: true }` | `204` (marca todas las del usuario). |
+| `PATCH` | `/api/notificaciones/:id` | dueño | — | `204` (la marca como leída) · `404` si no es suya. |
+| `PATCH` | `/api/notificaciones` | todos | — | `204` (marca todas las del usuario). |
+| `POST` | `/api/notificaciones/fcm-token` | todos | `{ token }` (el token FCM del teléfono) | `204`. Lo guarda en la sesión del pedido y se lo saca a cualquier otra sesión que lo tuviera: un teléfono recibe solo los push de quien tiene la sesión abierta ahí. `400` si falta el token. La app lo manda cada vez que entra (en web no). |
 
 ### Administración
 
@@ -189,58 +190,58 @@ que migrar después.
 
 ## De los services del frontend a la API
 
-Cada función de `frontend/src/services/` pasa a hacer un `fetch` al endpoint de la derecha, con la misma
-firma. Las pantallas no cambian.
+Cada función de `frontend/src/services/` que necesita datos del servidor hace su pedido con `api()` (o `apiArchivo()`
+para el PDF), de `services/apiClient.ts`: arma la URL con `EXPO_PUBLIC_API_URL`, manda el token y convierte un error
+`{ error }` en `ErrorApi`. Las carpetas tienen los mismos temas que `servicios/` del backend. Las funciones que no
+están en la tabla resuelven en el teléfono o reusan otra de la tabla (por ejemplo `getTurnoParaCalificar`,
+`countFeedbacksPendientes` o `aceptaCobertura`).
 
 | Service del frontend | Endpoint |
 |---|---|
-| `authService.iniciarSesion` / `cerrarSesion` / `getSesionActual` | `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/sesion` |
-| `authService.restaurarSesion` (al abrir la app y después de la huella) | `GET /api/sesion`. Ninguno más: la huella desbloquea el token ya guardado en el teléfono y se valida con `GET /api/sesion` (ver [05](05-sesiones-y-tokens.md#ingreso-con-huella)). |
-| `authService.cambiarPassword` | `PATCH /api/auth/contrasena` |
-| `authService.registrarPaciente` | `POST /api/auth/registro/paciente` |
-| `authService.verificarProfesional` / `registrarMedico` | `POST /api/auth/registro/profesional/verificar` · `POST /api/auth/registro/profesional` |
-| `planMedicoService.listObrasSociales` / `listPlanesMedicos` / `getPlanMedico` | `GET /api/planes` (obras sociales con sus planes; los otros dos se arman de esa respuesta) |
-| `planMedicoService.crearPlanMedico` | `POST /api/admin/planes` |
-| `especialidadService.listEspecialidades` | `GET /api/especialidades` |
-| `institucionService.buscarCentros` / `listInstituciones` | `GET /api/instituciones` |
-| `institucionService.crearInstitucion` | `POST /api/admin/instituciones` |
-| `institucionService.listInstituciones` (admin, sin plan) / `getInstitucion` | `GET /api/admin/instituciones?q=` · `GET /api/instituciones/:id` |
-| `institucionService.guardarCoberturasInstitucion` | `PUT /api/admin/instituciones/:id/coberturas` |
-| `institucionService.listLugaresDeAtencion` / `getSede` / `buscarLugares` | `GET /api/sedes?ids=` · `GET /api/sedes/buscar?q=` |
-| `institucionService.listCentrosPorSedes` | `GET /api/instituciones?sedes=` |
-| `medicoService.searchMedicos` / `getMedico` / `getMedicoActual` | `GET /api/medicos` · `GET /api/medicos/:id` · `GET /api/medicos/yo` |
-| `medicoService.guardarMisCoberturas` / `guardarMisLugares` | `PUT /api/medicos/yo/coberturas` · `PUT /api/medicos/yo/lugares` |
-| `franjaService.listMisFranjas` / `guardarMisFranjas` | `GET` / `PUT /api/medicos/yo/franjas` |
-| `pacienteService.getPacienteActual` / `cambiarCobertura` | `GET /api/pacientes/yo` · `PATCH /api/pacientes/yo` |
-| `pacienteService.alternarInstitucionFavorita` / `alternarMedicoFavorito` | `PUT` / `DELETE /api/pacientes/yo/favoritos/...` |
-| `fotoPerfil.guardarFotoPerfil` / `quitarFotoPerfil` | `PUT` / `DELETE /api/usuarios/yo/foto` |
-| `fotoPerfil.elegirFotoPerfil` | **Ninguno**: abre la cámara o la galería y deja la foto cuadrada de 512 px en JPEG, en el teléfono. |
-| `turnoService.listPacientesAsignados` | `GET /api/medicos/yo/pacientes` |
-| `turnoService.listMisTurnos` / `getProximoTurno` | `GET /api/pacientes/yo/turnos` · `.../proximo` |
-| `turnoService.listHorariosLibres` / `listDiasConTurnos` | `GET /api/turnos/disponibles` · `GET /api/turnos/dias-con-turnos` |
-| `turnoService.crearTurno` / `reprogramarTurno` | `POST /api/turnos` · `POST /api/turnos/:id/reprogramar` |
-| `turnoService.cancelarTurno` / `confirmarTurno` / `rechazarTurno` | `PATCH /api/turnos/:id` con el `estado` |
-| `turnoService.motivoSinCambios` | Ninguno: la app calcula el plazo de 24 h para deshabilitar los botones; el backend lo vuelve a controlar (`409`). |
-| `turnoService.ocultarTurnoDelHistorial` / `vaciarHistorialTurnos` | `PATCH /api/turnos/:id` · `DELETE /api/pacientes/yo/turnos/historial` |
-| `turnoService.listAgendaMedico` / `listTurnosMedico` | `GET /api/medicos/yo/agenda` |
-| `turnoService.listTurnosPaciente` | `GET /api/pacientes/yo/turnos/todos` |
-| `pacienteService.getPaciente` | Ninguno propio: el paciente de la sesión, o el que el profesional tiene en su agenda (vínculo por turnos). |
-| `estudioService.listOrdenesPaciente` / `listOrdenesArchivadasPaciente` | `GET /api/pacientes/yo/ordenes?archivadas=` |
-| `estudioService.listResultadosPaciente` / `listArchivadosPaciente` | `GET /api/pacientes/yo/resultados?archivados=` |
-| `estudioService.archivarOrden` / `desarchivarOrden` | `PATCH /api/ordenes/:id` |
-| `estudioService.archivarEstudio` / `desarchivarEstudio` | `PATCH /api/resultados/:id` |
-| `estudioService.getResultadoPdf` | `GET /api/resultados/:id/pdf` (con `apiArchivo`, que devuelve el PDF como string binario para el visor) |
-| `estudioService.getOrden` | `GET /api/ordenes/:id` |
-| `estudioService.crearOrden` / `listOrdenesEmitidas` | `POST /api/ordenes` · `GET /api/medicos/yo/pacientes/:id/ordenes` |
-| `recetaService.listMisRecetas` / `archivarReceta` / `desarchivarReceta` | `GET /api/pacientes/yo/recetas` · `PATCH /api/recetas/:id` |
-| `recetaService.crearReceta` / `listRecetasEmitidas` | `POST /api/recetas` · `GET /api/medicos/yo/pacientes/:id/recetas` |
-| `recetaService.listRecetasPaciente` | `GET /api/pacientes/yo/recetas/todas` |
-| `notaService.listNotasPaciente` / `crearNotaPaciente` | `GET` / `POST /api/medicos/yo/pacientes/:id/notas` |
-| `feedbackService.*` | `GET /api/pacientes/yo/feedback/pendientes` · `GET /api/pacientes/yo/feedback` · `POST /api/turnos/:id/feedback` |
-| `notificacionService.listNotificacionesPaciente` / `marcarNotificacionLeida` / `marcarTodasLeidas` | `GET /api/notificaciones` · `PATCH /api/notificaciones/:id` · `PATCH /api/notificaciones` |
-| `estadisticaService.getEstadisticasUso` / `getPacientesPorObraSocial` | `GET /api/admin/estadisticas` |
-| `estadisticaService.getMetricasAdmin` | `GET /api/admin/metricas` |
-| `resultadosVistos.*` | **Ninguno**: el aviso "Nuevo" de los resultados es solo del frontend. |
+| `sesion/authService.iniciarSesion` / `cerrarSesion` | `POST /api/auth/login` · `POST /api/auth/logout` |
+| `sesion/authService.restaurarSesion` (al abrir la app y después de la huella) | `GET /api/auth/sesion`. La huella desbloquea el token ya guardado en el teléfono (ver [05](05-sesiones-y-tokens.md#ingreso-con-huella)). |
+| `sesion/authService.cambiarPassword` | `PATCH /api/auth/contrasena` |
+| `sesion/authService.leerDni` / `registrarPaciente` | `POST /api/auth/registro/dni` · `POST /api/auth/registro/paciente` |
+| `sesion/authService.listProfesiones` / `verificarProfesional` / `registrarMedico` | `GET /api/catalogos/profesiones` · `POST /api/auth/registro/profesional/verificar` · `POST /api/auth/registro/profesional` |
+| `sesion/authService.getSesionActual` / `olvidarSesion`, `sesion/tokenSesion.*`, `sesion/biometria.*` | **Ninguno**: la sesión en memoria, el token en `expo-secure-store` y la huella, en el teléfono. |
+| `catalogos/catalogoService.listObrasSociales` / `listPlanesMedicos` / `getPlanMedico` | `GET /api/catalogos/planes` (obras sociales con sus planes; se pide una vez y los otros dos se arman de esa respuesta) |
+| `catalogos/catalogoService.listEspecialidades` / `getEspecialidad` | `GET /api/catalogos/especialidades` (se pide una vez) |
+| `catalogos/catalogoService.crearPlanMedico` | `POST /api/admin/planes` |
+| `catalogos/catalogoService.listPreguntasFrecuentes` | **Ninguno**: las preguntas de Ayuda están en `src/mocks/`. |
+| `catalogos/institucionService.buscarCentros` / `listCentrosPorSedes` | `GET /api/instituciones?tipos=&lat=&lng=` · `GET /api/instituciones?sedes=` |
+| `catalogos/institucionService.listInstituciones` / `getInstitucion` | `GET /api/instituciones` (con plan, para el paciente) o `GET /api/admin/instituciones` (sin plan, para el admin) · `GET /api/instituciones/:id` |
+| `catalogos/institucionService.crearInstitucion` / `guardarCoberturasInstitucion` | `POST /api/admin/instituciones` · `PUT /api/admin/instituciones/:id/coberturas` |
+| `catalogos/institucionService.listLugaresDeAtencion` / `buscarLugares` | `GET /api/sedes?ids=` · `GET /api/sedes/buscar?q=` |
+| `usuarios/pacienteService.getPacienteActual` / `cambiarCobertura` | `GET /api/pacientes/yo` (una vez; queda en memoria) · `PATCH /api/pacientes/yo` |
+| `usuarios/pacienteService.alternarMedicoFavorito` / `quitarMedicoFavorito` / `alternarInstitucionFavorita` / `quitarInstitucionFavorita` | `PUT` / `DELETE /api/pacientes/yo/favoritos/medicos/:id` y `.../favoritos/instituciones/:id` |
+| `usuarios/pacienteService.getPaciente` | Ninguno propio: el paciente de la sesión, o el que el profesional tiene en su agenda (vínculo por turnos). |
+| `usuarios/medicoService.searchMedicos` / `getMedico` / `getMedicoActual` | `GET /api/medicos?sede=` · `GET /api/medicos/:id` · `GET /api/medicos/yo` |
+| `usuarios/medicoService.guardarMisCoberturas` / `guardarMisLugares` | `PUT /api/medicos/yo/coberturas` · `PUT /api/medicos/yo/lugares` |
+| `usuarios/medicoService.listMisFranjas` / `guardarMisFranjas` | `GET` / `PUT /api/medicos/yo/franjas` |
+| `usuarios/medicoService.listNotasPaciente` / `crearNotaPaciente` | `GET` / `POST /api/medicos/yo/pacientes/:id/notas` |
+| `usuarios/fotoPerfil.guardarFotoPerfil` / `quitarFotoPerfil` | `PUT` / `DELETE /api/usuarios/yo/foto` |
+| `usuarios/fotoPerfil.elegirFotoPerfil` | **Ninguno**: abre la cámara o la galería y deja la foto cuadrada de 512 px en JPEG, en el teléfono. |
+| `turnos/turnoService.listMisTurnos` / `getProximoTurno` / `listTurnosPaciente` | `GET /api/pacientes/yo/turnos` · `.../turnos/proximo` · `.../turnos/todos` |
+| `turnos/turnoService.listHorariosLibres` / `listDiasConTurnos` | `GET /api/turnos/disponibles` · `GET /api/turnos/dias-con-turnos` |
+| `turnos/turnoService.crearTurno` / `reprogramarTurno` | `POST /api/turnos` · `POST /api/turnos/:id/reprogramar` |
+| `turnos/turnoService.cancelarTurno` / `confirmarTurno` / `rechazarTurno` / `ocultarTurnoDelHistorial` | `PATCH /api/turnos/:id` con el `estado` o con `ocultoEnHistorial` |
+| `turnos/turnoService.vaciarHistorialTurnos` | `DELETE /api/pacientes/yo/turnos/historial` |
+| `turnos/turnoService.motivoSinCambios` | Ninguno: la app calcula el plazo de 24 h para deshabilitar los botones; el backend lo vuelve a controlar (`409`). |
+| `turnos/turnoService.listAgendaMedico` / `listTurnosMedico` / `listPacientesAsignados` | `GET /api/medicos/yo/agenda` · `GET /api/medicos/yo/pacientes` |
+| `turnos/feedbackService.listTurnosParaCalificar` / `listFeedbackPaciente` / `crearFeedback` | `GET /api/pacientes/yo/feedback/pendientes` · `GET /api/pacientes/yo/feedback` · `POST /api/turnos/:id/feedback` |
+| `historialMedico/estudioService.listOrdenesPaciente` / `listOrdenesArchivadasPaciente` | `GET /api/pacientes/yo/ordenes?archivadas=false` / `?archivadas=true` |
+| `historialMedico/estudioService.listResultadosPaciente` / `listArchivadosPaciente` / `listEstudiosPaciente` | `GET /api/pacientes/yo/resultados?archivados=false` / `?archivados=true` / sin filtro |
+| `historialMedico/estudioService.archivarOrden` / `desarchivarOrden` / `archivarEstudio` / `desarchivarEstudio` | `PATCH /api/ordenes/:id` · `PATCH /api/resultados/:id` |
+| `historialMedico/estudioService.getOrden` / `getResultadoPdf` | `GET /api/ordenes/:id` · `GET /api/resultados/:id/pdf` (con `apiArchivo`, que devuelve el PDF como string binario para el visor) |
+| `historialMedico/estudioService.crearOrden` / `listOrdenesEmitidas` | `POST /api/ordenes` · `GET /api/medicos/yo/pacientes/:id/ordenes` |
+| `historialMedico/estudioService.listResultadosVistos` / `marcarResultadoVisto` | **Ninguno**: el aviso "Nuevo" de los resultados es solo del frontend (se guarda en el teléfono). |
+| `historialMedico/recetaService.listMisRecetas` / `listRecetasPaciente` / `archivarReceta` / `desarchivarReceta` | `GET /api/pacientes/yo/recetas` · `GET /api/pacientes/yo/recetas/todas` · `PATCH /api/recetas/:id` |
+| `historialMedico/recetaService.crearReceta` / `listRecetasEmitidas` | `POST /api/recetas` · `GET /api/medicos/yo/pacientes/:id/recetas` |
+| `historialMedico/historialService.getHistorialPaciente` | Ninguno propio: junta `listTurnosPaciente`, `listEstudiosPaciente` y `listRecetasPaciente`, en paralelo. |
+| `notificaciones/notificacionService.registrarPushToken` | `POST /api/notificaciones/fcm-token` (cada vez que se entra; en web no) |
+| `notificaciones/notificacionService.listNotificacionesPaciente` / `marcarNotificacionLeida` / `marcarTodasLeidas` | `GET /api/notificaciones` · `PATCH /api/notificaciones/:id` · `PATCH /api/notificaciones` |
+| `admin/estadisticaService.getEstadisticasUso` / `getPacientesPorObraSocial` | `GET /api/admin/estadisticas` |
+| `admin/estadisticaService.getMetricasAdmin` | `GET /api/admin/metricas` |
 
 ## Ejemplo: reservar un turno
 

@@ -80,7 +80,7 @@ export const requerirRol = (...roles: Rol[]) => (req: Request, _res: Response, n
 };
 ```
 
-Cada router no público usa `autenticar` (por ejemplo `rutasTurnos.use(autenticar)`) y cada ruta declara
+Cada router no público usa `autenticar` (por ejemplo `turnos.use(autenticar)`) y cada ruta declara
 los roles que acepta con `requerirRol("paciente")`. Express 5 manda al manejador de errores lo que tire
 un middleware `async`. Después, el **servicio** verifica que el dato sea del usuario
 (el turno es suyo, el paciente tiene un turno con este médico): si no lo es, responde `404` y no `403`,
@@ -90,11 +90,11 @@ para no confirmar que ese id existe.
 
 | Evento | Qué pasa |
 |---|---|
-| Logout (`POST /api/auth/logout`) | `revocadaEn = ahora` para ese token. `204`. |
+| Logout (`POST /api/auth/logout`) | `revocadaEn = ahora` para ese token. `204`. Ese teléfono deja de recibir push: solo se mandan a sesiones abiertas. |
 | Pasan **90 días sin usar la app** (`DIAS_SESION_INACTIVA`) | El token deja de valer (`401`) y la app vuelve al login. Mientras se use, no vence nunca (ver abajo). |
 | Cambio de contraseña | Se revocan **todas** las otras sesiones del usuario. |
 | Usuario desactivado por el admin | `activo = false`: sus tokens dejan de valer en el próximo pedido. |
-| Limpieza | Al iniciar el servidor (o una vez por día), borrar sesiones vencidas o revocadas hace más de 30 días. |
+| Limpieza | Al iniciar el servidor (`limpiarSesionesViejas`), se borran las sesiones vencidas o revocadas hace más de 30 días. |
 
 ### Sesión iniciada hasta que el usuario la cierre (decidido el 27/10/2026)
 
@@ -122,7 +122,7 @@ Nunca en texto plano (los mocks del Sprint 1 las tienen así porque no había ba
 `scrypt`, pensado para contraseñas: es lento a propósito, así probar millones de contraseñas cuesta caro.
 
 ```ts
-// src/auth/contrasenas.ts (idea)
+// src/servicios/sesion/contrasenas.ts (idea)
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 const scrypt = promisify(scryptCb) as (pass: string, salt: Buffer, largo: number) => Promise<Buffer>;
@@ -146,9 +146,10 @@ La regla de contraseña segura (regla 14: 8+ caracteres, mayúscula, número y c
 
 ## Intentos de login
 
-Para frenar a quien prueba contraseñas: un `Map` en memoria con los fallos por DNI y por IP. Más de 5
-fallos en 15 minutos → `429 "Demasiados intentos. Probá de nuevo en unos minutos."`. Cada fallo y cada
-login exitoso se guarda en `registro_auditoria`.
+Para frenar a quien prueba contraseñas: un `Map` en memoria (en `servicios/sesion/auth.ts`) con los fallos por DNI y
+por IP. Con 5 fallos del mismo DNI, o 20 de la misma IP, en 15 minutos → `429 "Demasiados intentos. Probá de nuevo
+en unos minutos."`. Un login exitoso borra los fallos de ese DNI. Cada fallo y cada login exitoso se guarda en
+`registro_auditoria`. Como vive en memoria, se reinicia al reiniciar el servidor.
 
 ## En la app (frontend)
 
@@ -156,37 +157,45 @@ login exitoso se guarda en `registro_auditoria`.
   operativo: Keychain en iOS, Keystore en Android), no en `AsyncStorage` (texto plano). Decidido el
   27/10/2026: se instala con `npx expo install expo-secure-store`, que elige la versión del SDK 57 sin
   tocar RN ni Expo. La sesión en sí vive en nuestra base (`sesiones`); el teléfono solo guarda la llave.
-  En web no existe: ahí el token vive solo en memoria y se pide login al recargar.
-- **Un solo lugar que hace los `fetch`:** `src/services/apiClient.ts` agrega `Authorization: Bearer` a
-  cada pedido y, si la respuesta es `401`, borra la sesión y manda al login.
-- **Hoy `src/services/biometria.ts` guarda el DNI y la contraseña en `AsyncStorage`** para el ingreso con
-  huella. Con tokens eso deja de hacer falta y **hay que sacarlo**: la contraseña no se guarda nunca en el
-  teléfono.
+  En web no existe: ahí el token vive solo en memoria y se pide login al recargar. Lo maneja
+  `src/services/sesion/tokenSesion.ts`.
+- **Un solo lugar que hace los `fetch`:** `pedir()` en `src/services/apiClient.ts` agrega
+  `Authorization: Bearer` a cada pedido y, si la respuesta es `401`, borra el token y manda al login. Corta el
+  pedido a los 15 s.
+- **La contraseña no se guarda nunca en el teléfono.** `src/services/sesion/biometria.ts` guarda en
+  `AsyncStorage` solo si la huella está activada y el DNI y el rol de la última cuenta, y al abrir la app borra la
+  contraseña que guardaba la versión del Sprint 1.
+- **Push:** cada vez que entra, la app manda el token FCM del teléfono a `POST /api/notificaciones/fcm-token`
+  (`registrarPushToken()` en `src/services/notificaciones/notificacionService.ts`) y queda en esa sesión
+  (`sesiones.fcmToken`). En web no se registra.
 
 ### Ingreso con huella
 
 La huella no reemplaza al token: lo **desbloquea**. Después del primer login con contraseña, el token queda
-en `expo-secure-store`; al abrir la app se pide la huella, se lee el token y se valida con `GET /api/sesion`.
+en `expo-secure-store`; al abrir la app se pide la huella, se lee el token y se valida con `GET /api/auth/sesion`.
 Si venció (`401`), se vuelve a pedir DNI y contraseña.
 
 ## Terceros: carga de PDF de resultados
 
 El laboratorio que carga los PDF no es un usuario de la app. Tiene una **clave de integración** propia:
 
-- La genera el admin para una institución (`claves_integracion`), se muestra **una sola vez** y se guarda
+- La genera el admin para una institución (tabla `claves_integracion`, que se crea cuando se implemente), se muestra **una sola vez** y se guarda
   solo su hash (igual que los tokens).
 - Se manda en el header `X-Clave-Integracion` y solo sirve para `POST /api/integracion/...`.
 - Solo puede cargar resultados de órdenes de **su** institución. Se puede desactivar (`activa = false`).
 
 ## Checklist de seguridad del backend
 
-- [ ] Contraseñas con `scrypt` y comparación con `timingSafeEqual`.
-- [ ] Tokens aleatorios de 32 bytes; en la base, solo el hash.
-- [ ] `autenticar` en todas las rutas no públicas; `requerirRol` en cada handler.
-- [ ] El paciente sale del token, nunca del body ni de la URL (`/yo`).
-- [ ] Verificación de dueño en cada lectura o cambio (un turno ajeno → `404`).
-- [ ] Límite de tamaño del body (JSON 100 KB, PDF 10 MB).
-- [ ] Mensajes de error sin detalles internos (ni stack ni errores de Prisma).
-- [ ] Intentos de login limitados y registrados.
-- [ ] Descargas de resultados registradas en `registro_auditoria` (regla 8).
-- [ ] `.env` fuera de git; en producción, HTTPS (el token viaja en cada pedido y no puede ir en texto plano por internet).
+- [x] Contraseñas con `scrypt` y comparación con `timingSafeEqual`.
+- [x] Tokens aleatorios de 32 bytes; en la base, solo el hash.
+- [x] `autenticar` en todas las rutas no públicas; `requerirRol` en cada router o handler (los dos en
+  `middlewares/autenticar.ts`).
+- [x] El paciente sale del token, nunca del body ni de la URL (`/yo`).
+- [x] Verificación de dueño en cada lectura o cambio (un turno ajeno → `404`).
+- [x] Límite de tamaño del body: JSON 100 KB; la foto de perfil, 1 MB de imagen (su ruta tiene su propio límite).
+  El de los PDF se define cuando se implemente la carga por un tercero.
+- [x] Mensajes de error sin detalles internos (ni stack ni errores de Prisma).
+- [x] Intentos de login limitados y registrados.
+- [x] Descargas de resultados registradas en `registro_auditoria` (regla 8).
+- [x] `.env` y las credenciales de Firebase fuera de git.
+- [ ] En producción, HTTPS (el token viaja en cada pedido y no puede ir en texto plano por internet).

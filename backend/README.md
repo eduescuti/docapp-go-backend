@@ -8,6 +8,7 @@ cátedra (`Practica17926`). La documentación está en [`../docs/`](../docs/).
 ```bash
 cd backend
 cp .env.example .env      # una sola vez; .env no se commitea. Completá SECRETO_IDENTIDAD (ver abajo)
+                          # y poné en backend/ el JSON de credenciales de Firebase (ver abajo)
 npm install               # también genera el cliente de Prisma
 npm run db:migrate        # crea prisma/dev.db con todas las tablas, índices y triggers
 npm run db:seed           # carga los datos de prueba (BORRA lo que haya en la base)
@@ -50,6 +51,7 @@ moderación de feedback por el admin.
 | Órdenes, resultados (PDF, con descarga registrada) y recetas | ✅ | ✅ |
 | Ficha del paciente para el profesional y notas | ✅ | ✅ |
 | Feedback (la valoración de cada profesional sale de acá) y notificaciones | ✅ | ✅ |
+| Notificaciones push con Firebase Cloud Messaging (29/10/2026; el profesional las recibe solo como push) | ✅ | ✅ |
 | Admin: métricas y estadísticas | ✅ | ✅ |
 | Verificación de identidad del registro con el código PDF417 del DNI (28/10/2026) | ✅ | ✅ |
 
@@ -58,6 +60,15 @@ identidad del registro, [06](../docs/06-reglas-de-negocio.md#verificación-de-id
 registro responde 500. Generala una vez con
 `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` y no la compartas: si cambia, los DNI ya
 usados dejan de reconocerse como repetidos.
+
+Las **credenciales de Firebase** (para los push) son un JSON en esta carpeta
+(`notificaciondocapp-firebase-adminsdk-….json`, en `.gitignore`). El servidor lo lee al arrancar: **sin ese archivo
+no arranca**. Se baja de la consola de Firebase (Configuración del proyecto → Cuentas de servicio → Generar nueva
+clave privada) o se lo pide al equipo; no se comparte por el repo.
+
+El código está ordenado en capas: `rutas/` (con el mapa de la API en `rutas/index.ts`) → `servicios/` (en carpetas
+por tema, las mismas que `services/` del frontend) → Prisma, con `middlewares/autenticar.ts` y `utils/`. El detalle, y
+cómo está escrito cada servicio, está en [02-arquitectura.md](../docs/02-arquitectura.md).
 
 > Si una migración futura cambia una tabla con triggers o índices parciales (p. ej. `turnos`), Prisma la
 > recrea en SQLite y se pierden: revisá la migración generada y volvé a agregarlos (ver

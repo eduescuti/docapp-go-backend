@@ -1,12 +1,12 @@
 import { Router } from "express";
 
-import { ErrorHttp } from "../errores";
-import { autenticar, usuarioDe } from "../middlewares/autenticar";
-import { requerirRol } from "../middlewares/requerirRol";
-import * as instituciones from "../servicios/instituciones";
+import { autenticar, pacienteIdDe, requerirRol, usuarioDe } from "../middlewares/autenticar";
+import * as servicio from "../servicios/catalogos/instituciones";
+import { ErrorHttp } from "../utils/errores";
 
-/** Se monta en /api (son dos recursos: instituciones y sedes); cada ruta pide sesión. */
-export const rutasInstituciones = Router();
+/** Dos recursos del mismo tema, cada uno con su prefijo; cada ruta pide sesión. */
+export const instituciones = Router();
+export const sedes = Router();
 
 /** "a,b,c" → ["a","b","c"] (como mucho 200). */
 const lista = (valor: unknown) =>
@@ -19,36 +19,34 @@ function numero(valor: unknown, campo: string): number | undefined {
   return n;
 }
 
-// GET /api/instituciones?tipos=&lat=&lng=&radioKm=&limite=&sedes= → los centros que puede usar el paciente.
-rutasInstituciones.get("/instituciones", autenticar, requerirRol("paciente"), async (req, res) => {
+// GET /api/instituciones?tipos=&lat=&lng=&sedes= → los centros que puede usar el paciente.
+instituciones.get("/", autenticar, requerirRol("paciente"), async (req, res) => {
   const lat = numero(req.query.lat, "lat");
   const lng = numero(req.query.lng, "lng");
   res.json(
-    await instituciones.buscarCentros({
-      pacienteId: usuarioDe(req).paciente!.id,
+    await servicio.buscarCentros({
+      pacienteId: pacienteIdDe(req),
       tipos: lista(req.query.tipos),
       cerca: lat !== undefined && lng !== undefined ? { latitud: lat, longitud: lng } : undefined,
-      radioKm: numero(req.query.radioKm, "radioKm"),
-      limite: numero(req.query.limite, "limite"),
       sedeIds: lista(req.query.sedes),
     }),
   );
 });
 
 // GET /api/instituciones/:id → institución con sedes y coberturas.
-rutasInstituciones.get("/instituciones/:id", autenticar, async (req, res) => {
-  res.json(await instituciones.obtenerInstitucion(String(req.params.id)));
+instituciones.get("/:id", autenticar, async (req, res) => {
+  res.json(await servicio.obtenerInstitucion(String(req.params.id)));
 });
 
 // GET /api/sedes/buscar?q= → lugares por nombre (el profesional elige dónde atiende: solo los públicos y los que
 // aceptan alguna de sus coberturas).
-rutasInstituciones.get("/sedes/buscar", autenticar, async (req, res) => {
+sedes.get("/buscar", autenticar, async (req, res) => {
   res.json(
-    await instituciones.buscarLugares(typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "", usuarioDe(req).medico?.id),
+    await servicio.buscarLugares(typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "", usuarioDe(req).medico?.id),
   );
 });
 
 // GET /api/sedes?ids= → cada sede con su institución (lugares de atención de un profesional).
-rutasInstituciones.get("/sedes", autenticar, async (req, res) => {
-  res.json(await instituciones.lugaresDeAtencion(lista(req.query.ids) ?? []));
+sedes.get("/", autenticar, async (req, res) => {
+  res.json(await servicio.lugaresDeAtencion(lista(req.query.ids) ?? []));
 });

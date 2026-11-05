@@ -1,16 +1,38 @@
-import { hashearContrasena, verificarContrasena } from "../auth/contrasenas";
-import { respuestaDeIngreso, revocarOtrasSesiones } from "../auth/sesiones";
-import { registrarAccion } from "../auditoria";
-import { prisma } from "../db";
-import { ErrorHttp } from "../errores";
-import { limpiarFallos, registrarFallo, verificarIntentos } from "../middlewares/limiteLogin";
-import { esContrasenaSegura, esDniValido, normalizarDni } from "../validacion";
+import type { ProfesionalPadron } from "@prisma/client";
+
+import { prisma, registrarAccion } from "../../utils/db";
+import { ErrorHttp } from "../../utils/errores";
+import { esContrasenaSegura, esDniValido, normalizarDni } from "../../utils/validacion";
+import { exigirPlanActivo } from "../catalogos/cobertura";
+import { hashearContrasena, verificarContrasena } from "./contrasenas";
 import { identidadDisponible, leerCodigoDni } from "./identidad";
-import { buscarEnRefeps, FichaPadron } from "./refeps";
+import { buscarEnRefeps, coincideProfesion, FichaPadron } from "./refeps";
+import { respuestaDeIngreso, revocarOtrasSesiones, revocarSesion } from "./sesiones";
 
 export interface Origen {
   ip: string;
   dispositivo?: string;
+}
+
+export interface DatosVerificacion {
+  dni: string;
+  matricula: string;
+  profesion: string;
+}
+
+interface DatosRegistroPaciente {
+  /** Texto del código PDF417 del DNI: de ahí salen el DNI, el nombre y el apellido (no se escriben a mano). */
+  codigoDni: string;
+  password: string;
+  planMedicoId: string;
+}
+
+interface DatosRegistroProfesional extends DatosVerificacion {
+  /** Texto del código PDF417 del DNI: tiene que ser de la misma persona que la ficha del padrón. */
+  codigoDni: string;
+  password: string;
+  genero: "femenino" | "masculino";
+  especialidadId: string;
 }
 
 const INCLUIR_PERFIL = { paciente: true, medico: true } as const;
@@ -19,45 +41,74 @@ const ERROR_DNI = "Ingresá un DNI válido (7 u 8 dígitos).";
 const ERROR_CUENTA_EXISTENTE = "Ya existe una cuenta con ese DNI. Iniciá sesión.";
 const ERROR_CONTRASENA = "La contraseña no cumple los requisitos de seguridad.";
 
-/** Regla 11: login único con DNI + contraseña; el rol lo determina la cuenta. */
+// Fallos de login por DNI y por IP, en memoria: más de 5 en 15 minutos → 429 (05-sesiones-y-tokens.md).
+const VENTANA_MS = 15 * 60 * 1000;
+const MAXIMO_FALLOS = 5;
+const fallos = new Map<string, number[]>();
+
+/** Filtra los fallos de esa clave que siguen dentro de la ventana de tiempo. */
+const recientes = (clave: string, ahora: number) => (fallos.get(clave) ?? []).filter((t) => ahora - t < VENTANA_MS);
+
+/** Bloquea con 429 si el DNI o la IP superaron el máximo de fallos. */
+function verificarIntentos(dni: string, ip: string): void {
+  const ahora = Date.now();
+  if (recientes(`dni:${dni}`, ahora).length >= MAXIMO_FALLOS || recientes(`ip:${ip}`, ahora).length >= MAXIMO_FALLOS * 4) {
+    throw new ErrorHttp(429, "Demasiados intentos. Probá de nuevo en unos minutos.");
+  }
+}
+
+/** Suma un fallo al DNI y a la IP. */
+function registrarFallo(dni: string, ip: string): void {
+  const ahora = Date.now();
+  for (const clave of [`dni:${dni}`, `ip:${ip}`]) fallos.set(clave, [...recientes(clave, ahora), ahora]);
+}
+
+/** Borra los fallos del DNI (tras un login exitoso). */
+function limpiarFallos(dni: string): void {
+  fallos.delete(`dni:${dni}`);
+}
+
+/** Separa un apellido en palabras, sin tildes ni mayúsculas. */
+const palabras = (texto: string) => texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[\s-]+/).filter(Boolean);
+
+/** Indica si los dos apellidos comparten alguna palabra. */
+const mismoApellido = (a: string, b: string) => palabras(a).some((p) => palabras(b).includes(p));
+
+/** Convierte una fila del padrón local en ficha, con las especializaciones como lista. */
+function aFicha({ id: _id, especializaciones, ...resto }: ProfesionalPadron): FichaPadron {
+  return { ...resto, especializaciones: JSON.parse(especializaciones) as string[] };
+}
+
+/** Exige que no haya una cuenta con ese DNI; si la hay, responde 409. */
+async function dniLibre(dni: string): Promise<void> {
+  if (await prisma.usuario.findUnique({ where: { dni } })) throw new ErrorHttp(409, ERROR_CUENTA_EXISTENTE);
+}
+
+/** Inicia sesión con DNI y contraseña; el rol lo determina la cuenta. */
 export async function iniciarSesion(dniIngresado: string, password: string, origen: Origen) {
   const dni = normalizarDni(dniIngresado);
-  // El frontend ya lo revisa, pero a la API se la puede llamar sin pasar por la app.
   if (!esDniValido(dni)) throw new ErrorHttp(400, ERROR_DNI);
   verificarIntentos(dni, origen.ip);
+
   const usuario = await prisma.usuario.findUnique({ where: { dni }, include: INCLUIR_PERFIL });
-  // Mismo mensaje para DNI inexistente, contraseña errónea o cuenta desactivada: no revela qué cuentas existen.
   if (!usuario || !usuario.activo || !(await verificarContrasena(password, usuario.passwordHash))) {
     registrarFallo(dni, origen.ip);
     await registrarAccion({ usuarioId: usuario?.id, accion: "login_fallido", detalle: `dni ${dni}`, ip: origen.ip });
     throw new ErrorHttp(401, ERROR_CREDENCIALES);
   }
+
   limpiarFallos(dni);
   await registrarAccion({ usuarioId: usuario.id, accion: "login", ip: origen.ip });
   return respuestaDeIngreso(usuario, origen);
 }
 
-async function dniLibre(dni: string): Promise<void> {
-  if (await prisma.usuario.findUnique({ where: { dni } })) throw new ErrorHttp(409, ERROR_CUENTA_EXISTENTE);
-}
-
-export interface DatosRegistroPaciente {
-  /** Texto del código PDF417 del DNI: de ahí salen el DNI, el nombre y el apellido (no se escriben a mano). */
-  codigoDni: string;
-  password: string;
-  planMedicoId: string;
-}
-
-/**
- * Regla 12: DNI (verificado con el código del documento, 28/10/2026), contraseña y plan de una obra social de la
- * app. Nombre y apellido salen del DNI. Entra directo.
- */
+/** Crea la cuenta del paciente con los datos del DNI escaneado y su plan, y entra directo. */
 export async function registrarPaciente(datos: DatosRegistroPaciente, origen: Origen) {
   const documento = leerCodigoDni(datos.codigoDni);
   if (!esContrasenaSegura(datos.password)) throw new ErrorHttp(400, ERROR_CONTRASENA);
-  const plan = await prisma.planMedico.findFirst({ where: { id: datos.planMedicoId, activo: true, obraSocial: { activa: true } } });
-  if (!plan) throw new ErrorHttp(400, "Elegí tu obra social y tu plan.");
+  const plan = await exigirPlanActivo(datos.planMedicoId);
   const identidad = await identidadDisponible(documento);
+
   const usuario = await prisma.usuario.create({
     data: {
       dni: documento.dni,
@@ -71,28 +122,11 @@ export async function registrarPaciente(datos: DatosRegistroPaciente, origen: Or
     include: INCLUIR_PERFIL,
   });
   await registrarAccion({ usuarioId: usuario.id, accion: "registro_paciente", detalle: "identidad verificada con el DNI", ip: origen.ip });
+
   return respuestaDeIngreso(usuario, origen);
 }
 
-/** Profesiones para el selector del registro: las del padrón local. */
-export async function listarProfesiones(): Promise<string[]> {
-  const filas = await prisma.profesionalPadron.findMany({ distinct: ["profesion"], select: { profesion: true }, orderBy: { profesion: "asc" } });
-  return filas.map((f) => f.profesion);
-}
-
-export interface DatosVerificacion {
-  dni: string;
-  matricula: string;
-  profesion: string;
-}
-
-const coincideProfesion = (a: string, b: string) => a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase());
-
-/**
- * Regla 13: la terna DNI + matrícula + profesión tiene que existir en el padrón nacional con matrícula
- * habilitada. Primero la copia local del padrón (ahí están las fichas de prueba, cuyas matrículas en el REFEPS
- * real son de otras personas); si no está, el REFEPS en línea.
- */
+/** Busca al profesional en el padrón local o en el REFEPS y exige matrícula habilitada de ese DNI y profesión. */
 export async function verificarProfesional(datos: DatosVerificacion): Promise<FichaPadron> {
   const dni = normalizarDni(datos.dni);
   const matricula = datos.matricula.trim();
@@ -101,9 +135,7 @@ export async function verificarProfesional(datos: DatosVerificacion): Promise<Fi
 
   const local = await prisma.profesionalPadron.findMany({ where: { dni, matricula } });
   const fila = local.find((p) => p.profesion.toLowerCase() === datos.profesion.toLowerCase());
-  const ficha: FichaPadron | null = fila
-    ? (({ id: _id, ...resto }) => ({ ...resto, especializaciones: JSON.parse(resto.especializaciones) as string[] }))(fila)
-    : await buscarEnRefeps(dni, matricula, datos.profesion);
+  const ficha = fila ? aFicha(fila) : await buscarEnRefeps(dni, matricula, datos.profesion);
 
   if (!ficha) throw new ErrorHttp(404, "No encontramos un profesional con ese DNI, matrícula y profesión en el padrón nacional.");
   if (!coincideProfesion(ficha.profesion, datos.profesion)) {
@@ -118,40 +150,26 @@ export async function verificarProfesional(datos: DatosVerificacion): Promise<Fi
   return ficha;
 }
 
-export interface DatosRegistroProfesional extends DatosVerificacion {
-  /** Texto del código PDF417 del DNI: tiene que ser de la misma persona que la ficha del padrón. */
-  codigoDni: string;
-  password: string;
-  genero: "femenino" | "masculino";
-  especialidadId: string;
-}
-
-/**
- * Crea la cuenta del profesional con los datos del padrón (decidido el 27/10/2026: alcanza con el padrón, sin
- * aprobación del admin). Género y especialidad los elige en el registro; lugares, coberturas y horarios, después.
- */
+/** Crea la cuenta del profesional con los datos del padrón (y guarda la ficha si vino del REFEPS), y entra directo. */
 export async function registrarProfesional(datos: DatosRegistroProfesional, origen: Origen) {
   if (!esContrasenaSegura(datos.password)) throw new ErrorHttp(400, ERROR_CONTRASENA);
   const especialidad = await prisma.especialidad.findUnique({ where: { id: datos.especialidadId } });
   if (!especialidad) throw new ErrorHttp(400, "Elegí tu especialidad.");
+
   const documento = leerCodigoDni(datos.codigoDni);
   if (documento.dni !== normalizarDni(datos.dni)) throw new ErrorHttp(400, "El DNI escaneado no coincide con el que ingresaste.");
   const ficha = await verificarProfesional(datos);
-  // El documento tiene que ser de la persona del padrón: al menos un apellido en común (el padrón y el DNI pueden
-  // diferir en tildes o en un segundo apellido).
-  const palabras = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[\s-]+/).filter(Boolean);
-  if (!palabras(ficha.apellido).some((p) => palabras(documento.apellido).includes(p))) {
-    throw new ErrorHttp(400, "El DNI escaneado no es de la persona registrada en el padrón.");
-  }
+  if (!mismoApellido(ficha.apellido, documento.apellido)) throw new ErrorHttp(400, "El DNI escaneado no es de la persona registrada en el padrón.");
+
   const identidad = await identidadDisponible(documento);
-  // Cada especialidad es de una profesión (Res. 1814/2015 y 199/2011): un kinesiólogo no elige "Cardiología".
   if (!coincideProfesion(especialidad.profesion, ficha.profesion)) {
     throw new ErrorHttp(400, `"${especialidad.nombre}" no es una especialidad de tu profesión (${ficha.profesion}).`);
   }
+
   const dni = normalizarDni(ficha.dni);
+  const passwordHash = await hashearContrasena(datos.password);
 
   const usuario = await prisma.$transaction(async (tx) => {
-    // La ficha queda en la copia local del padrón (si vino del REFEPS en línea todavía no estaba).
     const padron = await tx.profesionalPadron.upsert({
       where: { dni_matricula_profesion: { dni, matricula: ficha.matricula, profesion: ficha.profesion } },
       update: {},
@@ -160,7 +178,7 @@ export async function registrarProfesional(datos: DatosRegistroProfesional, orig
     return tx.usuario.create({
       data: {
         dni,
-        passwordHash: await hashearContrasena(datos.password),
+        passwordHash,
         rol: "doctor",
         nombre: ficha.nombre,
         apellido: ficha.apellido,
@@ -179,16 +197,24 @@ export async function registrarProfesional(datos: DatosRegistroProfesional, orig
     });
   });
   await registrarAccion({ usuarioId: usuario.id, accion: "registro_profesional", detalle: "identidad verificada con el DNI", ip: origen.ip });
+
   return respuestaDeIngreso(usuario, origen);
 }
 
-/** Cambia la contraseña y corta las otras sesiones del usuario (un teléfono perdido deja de entrar). */
+/** Cambia la contraseña y cierra las otras sesiones del usuario. */
 export async function cambiarContrasena(usuarioId: string, sesionId: string, actual: string, nueva: string, ip: string): Promise<void> {
   const usuario = await prisma.usuario.findUniqueOrThrow({ where: { id: usuarioId } });
   if (!(await verificarContrasena(actual, usuario.passwordHash))) throw new ErrorHttp(400, "La contraseña actual no es correcta.");
   if (!esContrasenaSegura(nueva)) throw new ErrorHttp(400, "La nueva contraseña no cumple los requisitos de seguridad.");
   if (nueva === actual) throw new ErrorHttp(400, "La nueva contraseña tiene que ser distinta de la actual.");
+
   await prisma.usuario.update({ where: { id: usuarioId }, data: { passwordHash: await hashearContrasena(nueva) } });
   await revocarOtrasSesiones(usuarioId, sesionId);
   await registrarAccion({ usuarioId, accion: "cambio_contrasena", ip });
+}
+
+/** Cierra la sesión (la revoca) y lo registra. */
+export async function cerrarSesion(sesionId: string, usuarioId: string, ip?: string): Promise<void> {
+  await revocarSesion(sesionId);
+  await registrarAccion({ usuarioId, accion: "logout", ip });
 }

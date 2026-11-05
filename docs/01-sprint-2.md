@@ -4,10 +4,12 @@ Qué hay que hacer en el backend este sprint, organizado por rol, y qué quedó 
 notas de planificación del 22/10/2026 (`Sprint2-Notas-de-planificacion.pdf`) y de las decisiones del
 25/10/2026.
 
-> El frontend ya quedó adaptado a todo esto (repo `docapp-go`). Los `services/` del frontend siguen
-> leyendo mocks, pero con las mismas reglas y la misma forma de datos que tiene que devolver esta API:
-> cuando el backend esté, cada service cambia su implementación interna por un `fetch`, sin tocar las
-> pantallas. La equivalencia service → endpoint está en [04-api.md](04-api.md#de-los-services-del-frontend-a-la-api).
+> **Estado (05/11/2026):** todo lo de esta lista está hecho y la app está conectada entera a la API (desde el
+> 28/10/2026): cada service del frontend hace su pedido con `api()` y los mocks de datos se borraron. La
+> equivalencia service → endpoint está en [04-api.md](04-api.md#de-los-services-del-frontend-a-la-api). Además se
+> sumaron las notificaciones push con Firebase Cloud Messaging (29/10/2026) y el 05/11/2026 se ordenó el backend
+> (rutas, servicios en carpetas por tema, `utils/`) y se reescribieron los servicios ([02](02-arquitectura.md#cómo-está-escrito-un-servicio-05112026)).
+> Queda afuera, documentado: la carga de PDF por un tercero y la moderación de feedback por el admin.
 
 ## Decisiones tomadas
 
@@ -33,50 +35,50 @@ Lo que todavía hay que confirmar está en [07-pendientes.md](07-pendientes.md).
 ### General
 
 - [x] Proyecto `backend/` con TypeScript, Express 5, Prisma y SQLite, armado como `Practica17926` ([02-arquitectura.md](02-arquitectura.md)).
-- [ ] Un `express.Router()` por recurso, validación de la entrada en cada ruta, `express.json` con límite, CORS y un manejador de errores que responde siempre `{ error }`.
+- [x] Un `express.Router()` por recurso, validación de la entrada en cada ruta, `express.json` con límite, CORS y un manejador de errores que responde siempre `{ error }`.
 - [x] `schema.prisma` con todas las tablas de [03-base-de-datos.md](03-base-de-datos.md) y la migración con los índices parciales.
-- [ ] Seed: catálogo de obras sociales y planes y coberturas verificadas ([08-coberturas.md](08-coberturas.md)), especialidades, establecimientos del REFES de CABA (el mismo JSON que usa el frontend), padrón de profesionales de ejemplo, franjas de atención, usuarios de prueba y resultados con PDF de ejemplo.
-- [ ] Contraseñas hasheadas con `scrypt` (nada de texto plano como en los mocks del Sprint 1).
-- [ ] Tokens de sesión: login, logout, expiración, middleware de autenticación y de rol ([05-sesiones-y-tokens.md](05-sesiones-y-tokens.md)).
-- [ ] Registro de acciones importantes (`registro_auditoria`).
+- [x] Seed: catálogo de obras sociales y planes y coberturas verificadas ([08-coberturas.md](08-coberturas.md)), especialidades, establecimientos del REFES de CABA (en `prisma/datos/demo.json`), padrón de profesionales de ejemplo, franjas de atención, usuarios de prueba y resultados con PDF de ejemplo.
+- [x] Contraseñas hasheadas con `scrypt` (nada de texto plano como en los mocks del Sprint 1).
+- [x] Tokens de sesión: login, logout, expiración, middleware de autenticación y de rol ([05-sesiones-y-tokens.md](05-sesiones-y-tokens.md)).
+- [x] Registro de acciones importantes (`registro_auditoria`).
 
 ### Paciente
 
-- [ ] **Turnos — reservar.** No puede existir otro turno activo con la misma **fecha + horario + hospital + especialidad + médico**, ni dos turnos activos del mismo médico a la misma fecha y hora. Solo se ofrece si la sede y el profesional le aparecen al paciente por su cobertura (la sede también si es pública). Todo turno nuevo nace `pendiente`.
-- [ ] **Turnos — estados.** `pendiente` → `confirmado` / `rechazado` (lo decide el médico); `cancelado` (lo decide el paciente); `completado` y `rechazado` automáticos al pasar la fecha. Detalle en [06-reglas-de-negocio.md](06-reglas-de-negocio.md#turnos).
-- [ ] **Turnos — historial.** Los turnos pasados (completados, rechazados, cancelados). "Eliminar del historial" solo oculta (`ocultoEnHistorial`).
-- [ ] **Turnos — cancelar y reprogramar.** El paciente puede cancelar o reprogramar sus turnos pendientes o confirmados **hasta 24 h antes**. Reprogramar = cancelar el viejo y reservar uno nuevo con el mismo profesional, en una sola operación.
-- [ ] **Estudios — archivar.** Órdenes y resultados se archivan y desarchivan (`archivadoEl`).
-- [ ] **Órdenes.** Dos estados: `pendiente` y `listo`.
-- [ ] **Resultados.** Médico + fecha + hospital + orden + archivo PDF. **Sin estado.** En este sprint los PDF vienen **solo del seed**; la carga por un tercero queda para después (ver [06-reglas-de-negocio.md](06-reglas-de-negocio.md#resultados-y-carga-de-pdf-por-un-tercero)).
-- [ ] **Recetas.** Nombre + dosis + cómo tomarla + duración + indicación + médico + fecha de emisión. Activa / pasada según la vigencia. Se archivan (solo las pasadas).
+- [x] **Turnos — reservar.** No puede existir otro turno activo con la misma **fecha + horario + hospital + especialidad + médico**, ni dos turnos activos del mismo médico a la misma fecha y hora. Solo se ofrece si la sede y el profesional le aparecen al paciente por su cobertura (la sede también si es pública). Todo turno nuevo nace `pendiente`.
+- [x] **Turnos — estados.** `pendiente` → `confirmado` / `rechazado` (lo decide el médico); `cancelado` (lo decide el paciente); `completado` y `rechazado` automáticos al pasar la fecha. Detalle en [06-reglas-de-negocio.md](06-reglas-de-negocio.md#turnos).
+- [x] **Turnos — historial.** Los turnos pasados (completados, rechazados, cancelados). "Eliminar del historial" solo oculta (`ocultoEnHistorial`).
+- [x] **Turnos — cancelar y reprogramar.** El paciente puede cancelar o reprogramar sus turnos pendientes o confirmados **hasta 24 h antes**. Reprogramar = cancelar el viejo y reservar uno nuevo con el mismo profesional, en una sola operación.
+- [x] **Estudios — archivar.** Órdenes y resultados se archivan y desarchivan (`archivadoEl`).
+- [x] **Órdenes.** Dos estados: `pendiente` y `listo`.
+- [x] **Resultados.** Médico + fecha + hospital + orden + archivo PDF. **Sin estado.** En este sprint los PDF vienen **solo del seed**; la carga por un tercero queda para después (ver [06-reglas-de-negocio.md](06-reglas-de-negocio.md#resultados-y-carga-de-pdf-por-un-tercero)).
+- [x] **Recetas.** Nombre + dosis + cómo tomarla + duración + indicación + médico + fecha de emisión. Activa / pasada según la vigencia. Se archivan (solo las pasadas).
 
 ### Médico
 
-- [ ] **Órdenes.** El médico le asigna una orden al paciente con sus estudios e **indicaciones**; queda vinculada a **hospital + fecha + médico**. El lugar es uno de los suyos que le aparezca al paciente por su cobertura.
-- [ ] **Recetas.** El médico le asigna una receta al paciente.
-- [ ] **Confirmar / rechazar** los turnos pendientes de sus pacientes.
-- [ ] **Agenda.** Turnos del médico por rango de fechas (calendario del mes) y sus **franjas de atención** por lugar y día.
-- [ ] **Perfil.** Todos los datos del registro + **lugares de atención** (hospitales) + **coberturas que atiende** (las elige él). **Sin horarios de atención.**
+- [x] **Órdenes.** El médico le asigna una orden al paciente con sus estudios e **indicaciones**; queda vinculada a **hospital + fecha + médico**. El lugar es uno de los suyos que le aparezca al paciente por su cobertura.
+- [x] **Recetas.** El médico le asigna una receta al paciente.
+- [x] **Confirmar / rechazar** los turnos pendientes de sus pacientes.
+- [x] **Agenda.** Todos los turnos del médico (la app arma el calendario del mes) y sus **franjas de atención** por lugar y día.
+- [x] **Perfil.** Todos los datos del registro + **lugares de atención** (hospitales) + **coberturas que atiende** (las elige él). **Sin horarios de atención.**
 
 ### Administrador
 
-- [ ] **Cargar obras sociales** (y sus planes).
-- [ ] **Cargar hospitales** (institución + sede con dirección y coordenadas) y **editar** qué coberturas aceptan, con fuente y fecha.
-- [ ] **Métricas.** Turnos por estado, especialidad e institución; profesionales mejor valorados.
+- [x] **Cargar obras sociales** (y sus planes).
+- [x] **Cargar hospitales** (institución + sede con dirección y coordenadas) y **editar** qué coberturas aceptan, con fuente y fecha.
+- [x] **Métricas.** Turnos por estado, especialidad e institución; profesionales mejor valorados.
 
 ### Hospitales
 
-- [ ] **Filtro de hospitales por obra social.** Un público se ve siempre (regla 15); un privado, solo si acepta la obra social del paciente (entera o su plan).
-- [ ] Cada hospital tiene **nombre + dirección + latitud + longitud** (en `instituciones` + `sedes`).
+- [x] **Filtro de hospitales por obra social.** Un público se ve siempre (regla 15); un privado, solo si acepta la obra social del paciente (entera o su plan).
+- [x] Cada hospital tiene **nombre + dirección + latitud + longitud** (en `instituciones` + `sedes`).
 
 ## Orden de trabajo sugerido
 
 1. Esqueleto del servidor como `Practica17926`: `GET /api/health`, `cors`, `express.json`, manejador de errores.
 2. `schema.prisma` + migración + seed. Probar con `npx prisma studio`.
-3. Autenticación: registro, login, logout, `GET /api/sesion` y el middleware de rol.
+3. Autenticación: registro, login, logout, `GET /api/auth/sesion` y el middleware de rol.
 4. Lecturas que no cambian nada: planes, especialidades, instituciones filtradas por plan, médicos.
 5. Turnos (el núcleo): disponibilidad, reservar, cancelar, confirmar / rechazar, vencimiento.
 6. Órdenes, resultados y recetas, con archivado.
 7. Admin: alta de obras sociales y hospitales, métricas.
-8. Conectar el frontend: cambiar cada service por `fetch` con el token.
+8. Conectar el frontend: cambiar cada service por `fetch` con el token (hecho el 27 y el 28/10/2026).

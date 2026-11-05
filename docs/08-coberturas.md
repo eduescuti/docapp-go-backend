@@ -131,7 +131,7 @@ interface CoberturaAceptada {
 
 | Método | Ruta | Rol | Body | Respuesta |
 |---|---|---|---|---|
-| `GET` | `/api/planes` | pública | — | Obras sociales con sus planes (el registro elige obra social y después plan). |
+| `GET` | `/api/catalogos/planes` | pública | — | Obras sociales con sus planes (el registro elige obra social y después plan). |
 | `POST` | `/api/admin/instituciones` | admin | `{ ..., coberturas: CoberturaAceptada[], fuente, fuenteUrl?, verificadoEl }` | `201`. Si es pública, `coberturas` puede ir vacío. |
 | `GET` | `/api/admin/instituciones/:id/coberturas` | admin | — | `CoberturaAceptada[]` con su fuente y fecha (para la pantalla de edición). |
 | `PUT` | `/api/admin/instituciones/:id/coberturas` | admin | `{ coberturas: CoberturaAceptada[], fuente, fuenteUrl?, verificadoEl }` | `200`. Reemplaza la lista entera. |

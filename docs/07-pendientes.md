@@ -40,7 +40,7 @@ Todos los puntos abiertos de las notas del Sprint 2 y de la planificación del b
 | 3 | ¿Una orden pasa a LISTO con el primer resultado o cuando están todos? | **Con el primero** ("algún resultado", como dicen las notas). |
 | 4 | El estado de la receta, ¿se guarda o se calcula? | **Se calcula** con `vigenteHasta >= hoy`. |
 | 5 | ¿Qué recetas se pueden archivar? | **Solo las pasadas.** |
-| 6 | ¿Cómo carga el tercero los PDF? | **En este sprint, solo desde el seed** (PDF de ejemplo). El endpoint con clave de integración queda documentado para más adelante; la tabla `claves_integracion` se crea igual. |
+| 6 | ¿Cómo carga el tercero los PDF? | **En este sprint, solo desde el seed** (PDF de ejemplo). El endpoint con clave de integración queda documentado para más adelante; la tabla `claves_integracion` se sacó el 05/11/2026 (no se usaba) y se crea con una migración cuando se implemente. |
 | 12 | ¿Dónde se hacen los estudios de una orden? | En uno de los **lugares de atención del profesional que le aparezca al paciente** por su cobertura (o público). |
 
 ### Coberturas

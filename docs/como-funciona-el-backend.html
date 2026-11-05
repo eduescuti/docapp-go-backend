@@ -369,6 +369,103 @@
       border-left-color: #9333EA;
     }
 
+    /* App y servidor: services/ y servicios/ */
+    .dos-puntas {
+      margin-top: 32px;
+    }
+
+    .dos-puntas>h3 {
+      font-size: 17px;
+      margin: 0 0 6px;
+    }
+
+    .dos-puntas>p {
+      margin: 0 0 14px;
+      color: var(--muted-fg);
+      max-width: 70ch;
+    }
+
+    .cadena {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 14px;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
+    }
+
+    .cadena li {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--muted);
+    }
+
+    .cadena li.flecha-cadena {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--muted-fg);
+    }
+
+    .cadena li.resaltado {
+      border-color: var(--primary);
+      background: var(--accent);
+      font-weight: 600;
+    }
+
+    .puntas {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .punta {
+      min-width: 0;
+      border-top: 4px solid var(--primary);
+    }
+
+    .punta:nth-child(2) {
+      border-top-color: #0D9488;
+    }
+
+    .punta h4 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .punta ul {
+      margin: 0 0 10px;
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .punta pre {
+      margin: 0;
+      padding: 10px 12px;
+      overflow-x: auto;
+      border-radius: var(--radius-sm);
+      background: var(--muted);
+      color: var(--foreground);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .punta pre code {
+      display: block;
+      padding: 0;
+      background: none;
+      font-size: inherit;
+      white-space: pre;
+    }
+
+    .dos-puntas .aclaracion {
+      margin: 14px 0 0;
+      font-size: 14px;
+    }
+
     .aparece {
       opacity: 0;
       transform: translateY(14px);
@@ -1295,32 +1392,42 @@
       <div class="capas">
         <div class="card capa aparece">
           <h3>🧭 Rutas · <code>rutas/</code></h3>
-          <p>Reciben el pedido HTTP, leen y validan el body y la URL, y llaman al servicio. No tienen reglas de negocio.
-          </p>
+          <p>Reciben el pedido HTTP, leen y validan el body y la URL, y llaman al servicio. No tienen reglas de negocio
+            ni usan Prisma.</p>
           <ul>
-            <li><code>auth.ts</code> login y registro</li>
-            <li><code>turnos.ts</code> reservar, cancelar</li>
-            <li><code>medicos.ts</code>, <code>admin.ts</code>…</li>
+            <li><code>index.ts</code> el mapa: un prefijo por router</li>
+            <li><code>auth.ts</code> login, sesión y registro</li>
+            <li><code>turnos.ts</code>, <code>medicos.ts</code>, <code>admin.ts</code>…</li>
           </ul>
         </div>
         <div class="card capa aparece">
           <h3>⚙️ Servicios · <code>servicios/</code></h3>
-          <p>El corazón: las reglas (cobertura, 24 h, franjas, quién ve qué). Usan transacciones cuando hay que cambiar
-            varias cosas juntas.</p>
+          <p>El corazón: las reglas (cobertura, 24 h, franjas, quién ve qué). Están en carpetas por tema, las mismas que
+            en la app, y usan transacciones cuando hay que cambiar varias cosas juntas.</p>
           <ul>
-            <li><code>turnos.ts</code> disponibilidad y estados</li>
-            <li><code>cobertura.ts</code> reglas 1, 15 y 18</li>
-            <li><code>identidad.ts</code> DNI escaneado</li>
+            <li><code>turnos/</code> disponibilidad, estados y feedback</li>
+            <li><code>catalogos/cobertura.ts</code> quién ve qué según su plan</li>
+            <li><code>sesion/</code> login, tokens y DNI escaneado</li>
+            <li><code>formato.ts</code> filas de la base → forma de la app</li>
           </ul>
         </div>
         <div class="card capa aparece">
           <h3>🛡️ Middlewares · <code>middlewares/</code></h3>
-          <p>Filtros por los que pasa cada pedido antes (o después) de la ruta.</p>
+          <p>Filtros por los que pasa cada request antes de la ruta. Están en <code>autenticar.ts</code>.</p>
           <ul>
             <li><code>autenticar</code> token → usuario</li>
             <li><code>requerirRol</code> paciente / doctor / admin</li>
-            <li><code>limiteLogin</code> frena a quien adivina</li>
-            <li><code>manejarErrores</code> todo error → <code>{ error }</code></li>
+          </ul>
+        </div>
+        <div class="card capa aparece">
+          <h3>🧰 Utilidades · <code>utils/</code></h3>
+          <p>Lo que usa todo el backend.</p>
+          <ul>
+            <li><code>db.ts</code> Prisma y el registro de auditoría</li>
+            <li><code>errores.ts</code> <code>ErrorHttp</code> y <code>manejarErrores</code>: todo error →
+              <code>{ error }</code></li>
+            <li><code>validacion.ts</code> forma de lo que llega (DNI, textos)</li>
+            <li><code>tiempo.ts</code> “hoy” y “ahora” en hora argentina</li>
           </ul>
         </div>
         <div class="card capa aparece">
@@ -1333,6 +1440,66 @@
             <li><code>dev.db</code> el archivo SQLite</li>
           </ul>
         </div>
+      </div>
+
+      <div class="dos-puntas">
+        <h3>¿<code>services/</code> y <code>servicios/</code> son lo mismo?</h3>
+        <p>No. Se llaman parecido, pero uno está en la app y el otro en el servidor: el de la app
+          <b>pide</b> los datos y el del servidor <b>decide</b> qué se puede hacer y qué se devuelve.
+        </p>
+
+        <ul class="cadena" aria-label="Recorrido de un pedido, desde la pantalla hasta la base">
+          <li>Pantalla</li>
+          <li class="flecha-cadena" aria-hidden="true">→</li>
+          <li class="resaltado"><code>services/</code> (app)</li>
+          <li class="flecha-cadena" aria-hidden="true">→</li>
+          <li>HTTP</li>
+          <li class="flecha-cadena" aria-hidden="true">→</li>
+          <li><code>rutas/</code></li>
+          <li class="flecha-cadena" aria-hidden="true">→</li>
+          <li class="resaltado"><code>servicios/</code> (servidor)</li>
+          <li class="flecha-cadena" aria-hidden="true">→</li>
+          <li>Prisma</li>
+          <li class="flecha-cadena" aria-hidden="true">→</li>
+          <li>Base</li>
+        </ul>
+
+        <div class="puntas">
+          <div class="card punta">
+            <h4>📱 En la app: <code>frontend/src/services/</code></h4>
+            <ul>
+              <li><b>Lo llaman</b> las pantallas.</li>
+              <li><b>Habla con</b> la API, por HTTP, con <code>api()</code>.</li>
+              <li><b>Hace:</b> arma el pedido y devuelve la respuesta tipada.</li>
+            </ul>
+            <pre><code>// services/turnos/turnoService.ts
+function listMisTurnos() {
+  return api&lt;MisTurnos&gt;("/api/pacientes/yo/turnos");
+}</code></pre>
+          </div>
+          <div class="card punta">
+            <h4>⚙️ En el servidor: <code>backend/src/servicios/</code></h4>
+            <ul>
+              <li><b>Lo llaman</b> las rutas.</li>
+              <li><b>Habla con</b> la base, con Prisma.</li>
+              <li><b>Hace:</b> aplica las reglas de negocio y arma los datos.</li>
+            </ul>
+            <pre><code>// servicios/turnos/turnos.ts (resumido)
+/** Obtiene los turnos del paciente: próximos e historial. */
+async function misTurnos(pacienteId: string) {
+  await vencerTurnos();
+  const turnos = await prisma.turno.findMany({ where: { pacienteId } });
+  …
+}</code></pre>
+          </div>
+        </div>
+
+        <p class="aclaracion">Las dos puntas se unen en la ruta: <code>GET /api/pacientes/yo/turnos</code> llama a
+          <code>misTurnos()</code>. Las rutas nunca consultan la base: siempre pasan por un servicio (ruta → servicio →
+          Prisma). Y las dos carpetas tienen los mismos temas (<code>sesion/</code>, <code>usuarios/</code>,
+          <code>turnos/</code>, <code>historialMedico/</code>, <code>catalogos/</code>, <code>notificaciones/</code>,
+          <code>admin/</code>): lo que está de un lado se encuentra en la misma carpeta del otro.
+        </p>
       </div>
     </section>
 
@@ -1394,16 +1561,19 @@
         <div class="card">
           <h3 style="font-size:15px;margin-bottom:8px">En la app: <code>services/apiClient.ts</code></h3>
           <p style="margin:0 0 10px;color:var(--muted-fg);font-size:14px">Todos los pedidos salen de una sola función,
-            <code>api()</code>. Ahí se manejan los casos generales para que ninguna pantalla los repita:
+            <code>pedir()</code>, que usan <code>api()</code> (respuestas JSON) y <code>apiArchivo()</code> (el PDF de un
+            resultado). Ahí se manejan los casos generales para que ninguna pantalla los repita:
           </p>
           <div class="reglas" style="margin-top:0">
-            <div class="regla"><span class="n">1</span><span><b>Sin internet</b> o servidor apagado → “No pudimos
-                conectarnos con el servidor.”</span></div>
+            <div class="regla"><span class="n">1</span><span><b>Sin internet</b>, servidor apagado o <b>más de 15 s</b>
+                sin respuesta → “No pudimos conectarnos con el servidor.”</span></div>
             <div class="regla"><span class="n">2</span><span><b>401 con sesión</b> → borra el token y vuelve al
                 login.</span></div>
             <div class="regla"><span class="n">3</span><span><b>Cualquier otro error</b> →
                 <code>ErrorApi(status, mensaje)</code>; la pantalla muestra el mensaje.</span></div>
-            <div class="regla"><span class="n">4</span><span><b>Doble control</b>: la app valida al escribir (más
+            <div class="regla"><span class="n">4</span><span><b>Falta <code>EXPO_PUBLIC_API_URL</code></b> en el
+                <code>.env</code> de la app → lo avisa sin intentar el pedido.</span></div>
+            <div class="regla"><span class="n">5</span><span><b>Doble control</b>: la app valida al escribir (más
                 cómodo), el servidor valida siempre (más seguro).</span></div>
           </div>
           <p style="margin:12px 0 0;color:var(--muted-fg);font-size:13px">Y la base es la última red: índices únicos y
@@ -1501,8 +1671,10 @@
     <section id="rutas">
       <h2>Todas las rutas de la API</h2>
       <p class="bajada">Una <b>ruta</b> es una “puerta” del servidor: la app golpea una con un pedido y el servidor
-        responde. El backend tiene <b data-contar="70" class="cuenta-rutas">0</b> puertas, cada una con su archivo en
-        <code>src/rutas/</code>. Tocá una para ver qué hace, quién la puede usar, qué le mandás y qué te devuelve.</p>
+        responde. El backend tiene <b data-contar="71" class="cuenta-rutas">0</b> puertas, cada una con su archivo en
+        <code>src/rutas/</code>; el mapa con el prefijo de cada archivo está en <code>src/rutas/index.ts</code>. Tocá una
+        para ver qué hace, quién la puede usar, qué le mandás y qué te devuelve.
+      </p>
 
       <div class="card">
         <h3 style="font-size:15px;margin:0 0 12px">¿Cómo se lee una ruta?</h3>
@@ -1526,7 +1698,8 @@
         <p style="margin:14px 0 0;font-size:14px;color:var(--muted-fg)">Lo que va después de <code>?</code> son
           filtros opcionales (<code>?fecha=2026-11-02</code>). <code>/yo</code> significa “el usuario del token”: el
           servidor nunca confía en un id de usuario que venga en la URL. Si pedís una ruta que no existe, responde
-          <b>404</b> <code>{ error: "No existe esa ruta." }</code>.</p>
+          <b>404</b> <code>{ error: "No existe esa ruta." }</code>.
+        </p>
       </div>
 
       <div class="card rutas-filtros">
@@ -1579,15 +1752,20 @@
       <h2>Notificaciones</h2>
       <p class="bajada">Las genera el servidor cuando pasa algo: nadie las crea a mano. Cada una se guarda en la tabla
         <code>notificaciones</code> (la lista de la campana) y además llega como <b>push</b> al teléfono con Firebase
-        Cloud Messaging (FCM).</p>
+        Cloud Messaging (FCM).
+      </p>
       <div class="card" style="margin-bottom:12px">
         <h3 style="font-size:15px;margin:0 0 4px">Cómo viaja un aviso</h3>
-        <p style="margin:0;color:var(--muted-fg);font-size:14px">Al entrar, la app manda el token FCM del teléfono
-          (<code>POST /api/notificaciones/fcm-token</code>) y queda guardado en su sesión: al cerrar sesión deja de
-          recibir. Cuando pasa algo, <code>notificar()</code> guarda el aviso en la misma transacción que el cambio y,
-          recién cuando la transacción terminó bien, <code>enviarPush()</code> lo manda. Si el cambio se revierte, no
-          sale ningún push.</p>
-        <div class="token" aria-hidden="true"><span>📝 notificar()</span><span class="flecha">→ commit →</span><span>📲
+        <p style="margin:0;color:var(--muted-fg);font-size:14px">Cada vez que entrás (al abrir la app con la sesión
+          guardada, con contraseña, con huella o al registrarte), la app pide permiso de notificaciones y manda el token FCM del teléfono
+          (<code>POST /api/notificaciones/fcm-token</code>, desde <code>registrarPushToken()</code>). Queda guardado en
+          esa sesión: al cerrar sesión, el teléfono deja de recibir. En web no se registra.</p>
+        <p style="margin:8px 0 0;color:var(--muted-fg);font-size:14px">Cuando pasa algo, el servicio usa
+          <code>conAviso()</code>: hace el cambio y guarda el aviso (<code>notificar()</code>) en la misma transacción y,
+          recién cuando terminó bien, <code>enviarPush()</code> lo manda sin hacer esperar la respuesta. Si el cambio se
+          revierte, no sale ningún push. Va a cada teléfono del usuario por separado: si uno falla (por ejemplo, un
+          token viejo), los demás lo reciben igual.</p>
+        <div class="token" aria-hidden="true"><span>📝 cambio + notificar()</span><span class="flecha">→ commit →</span><span>📲
             enviarPush()</span><span class="flecha">→ FCM →</span><span>🔔 teléfono</span></div>
       </div>
       <div class="capas">
@@ -1628,7 +1806,8 @@
       <h2>La base de datos</h2>
       <p class="bajada">Un archivo SQLite (<code>prisma/dev.db</code>) manejado con Prisma. Con
         <code>npm run db:seed</code> se carga
-        todo esto de prueba (y se borra lo que había).
+        todo esto de prueba (y se borra lo que había). Son <b>26 tablas</b>: acá van las principales, y todas con sus
+        columnas y relaciones están en el <a href="diagrama-base-de-datos.html">diagrama de la base</a>.
       </p>
       <div class="numeros">
         <div class="card numero"><b data-contar="1077">0</b><span>establecimientos reales (REFES, CABA)</span></div>
@@ -1665,6 +1844,7 @@
       </p>
       <div class="terminal">
         <div><span class="c"># una sola vez: copiar .env.example a .env y completar SECRETO_IDENTIDAD</span></div>
+        <div><span class="c"># y poner en backend/ el JSON de credenciales de Firebase (sin él no arranca)</span></div>
         <div>npm install</div>
         <div>npm run db:migrate <span class="c"># crea las tablas</span></div>
         <div>npm run db:seed &nbsp;&nbsp;<span class="c"># datos de prueba</span></div>
@@ -1674,7 +1854,7 @@
     </section>
 
     <footer>Detalle técnico completo en <code>docs/</code>: arquitectura (02), base de datos (03), API (04), sesiones
-      (05) y reglas (06).</footer>
+      (05), reglas (06) y el <a href="diagrama-base-de-datos.html">diagrama de la base</a>.</footer>
   </main>
 
   <script>
@@ -1794,9 +1974,9 @@
         texto: '<p>La app guarda el token con <code>expo-secure-store</code>: el sistema operativo lo cifra y ninguna otra app lo puede leer. La contraseña no se guarda en ningún lado.</p><p>En <b>web</b> el token queda solo en la memoria de la pestaña: si recargás, hay que entrar de nuevo (el navegador no tiene un lugar igual de seguro).</p>'
       },
       {
-        corto: "4. Cada pedido", titulo: "4. En cada pedido mostrás la “pulsera”",
+        corto: "4. Cada request", titulo: "4. En cada request mostrás la “pulsera”",
         escena: '<div class="actor"><span class="icono">📱</span>App</div><span class="viaja">Bearer x7Fq…9aB</span><div class="actor"><span class="icono">🔑</span>autenticar</div>',
-        texto: '<p>Cada pedido lleva el encabezado <code>Authorization: Bearer x7Fq…9aB</code>. El middleware <code>autenticar</code> calcula el hash, busca la fila en <code>sesiones</code> y revisa cuatro cosas:</p><p><span class="dato-clave">✔ existe</span><span class="dato-clave">✔ no fue revocada</span><span class="dato-clave">✔ no venció</span><span class="dato-clave">✔ la cuenta está activa</span></p><p>Si todo da bien, ya sabe quién sos y qué rol tenés. Si algo falla: <b>401</b>.</p>'
+        texto: '<p>Cada request lleva el header <code>Authorization: Bearer x7Fq…9aB</code>. El middleware <code>autenticar</code> calcula el hash, busca la fila en <code>sesiones</code> y revisa cuatro cosas:</p><p><span class="dato-clave">✔ existe</span><span class="dato-clave">✔ no fue revocada</span><span class="dato-clave">✔ no venció</span><span class="dato-clave">✔ la cuenta está activa</span></p><p>Si todo da bien, ya sabe quién sos y qué rol tenés. Si algo falla: <b>401</b>.</p>'
       },
       {
         corto: "5. Se renueva", titulo: "5. Usarla la renueva",
@@ -1805,8 +1985,8 @@
       },
       {
         corto: "6. Volver a abrir", titulo: "6. Cerrás y volvés a abrir la app",
-        escena: '<div class="actor"><span class="icono">🔐</span>Secure Store</div><span class="viaja">GET /api/sesion</span><div class="actor"><span class="icono">🖥️</span>Servidor</div>',
-        texto: '<p>Al abrir, la app busca el token guardado y le pregunta al servidor si sigue valiendo (<code>GET /api/sesion</code>). Si sí, entrás directo al Inicio de tu rol, sin escribir nada.</p><p>Con la <b>huella</b> activada, primero te la pide el celular y recién después usa el token: la huella “desbloquea” la sesión guardada.</p>'
+        escena: '<div class="actor"><span class="icono">🔐</span>Secure Store</div><span class="viaja">GET /api/auth/sesion</span><div class="actor"><span class="icono">🖥️</span>Servidor</div>',
+        texto: '<p>Al abrir, la app busca el token guardado y le pregunta al servidor si sigue valiendo (<code>GET /api/auth/sesion</code>). Si sí, entrás directo al Inicio de tu rol, sin escribir nada.</p><p>Con la <b>huella</b> activada, primero te la pide el celular y recién después usa el token: la huella “desbloquea” la sesión guardada.</p>'
       },
       {
         corto: "7. Termina", titulo: "7. Cómo termina una sesión",
@@ -1874,17 +2054,18 @@
     });
     simular();
 
-    // ───── Rutas de la API (src/rutas/*.ts, montadas en src/index.ts) ─────
+    // ───── Rutas de la API (src/rutas/*.ts, con su prefijo en src/rutas/index.ts) ─────
     // q: quién la puede usar. "publica" = sin token; "sesion" = cualquiera con sesión; si no, los roles.
     const GRUPOS = [
       {
-        titulo: "Encendido", archivo: "index.ts", rutas: [
+        titulo: "Encendido", archivo: "rutas/index.ts", rutas: [
           ["GET", "/api/health", ["publica"], "Pregunta si el servidor está prendido y si llega a la base. Sirve para probar la conexión.", null, "{ ok: true }"],
         ]
       },
       {
         titulo: "Entrar y registrarse", archivo: "rutas/auth.ts", rutas: [
           ["POST", "/api/auth/login", ["publica"], "Entrar con DNI y contraseña. El DNI tiene que tener 7 u 8 dígitos. Crea una sesión nueva. Con 5 intentos fallidos seguidos del mismo DNI en 15 minutos, se bloquea un rato.", "{ dni, password }", "{ token, expiraEn, sesion }"],
+          ["GET", "/api/auth/sesion", ["sesion"], "“¿Este token sigue valiendo?”. La app la usa al abrirse (y después de la huella) para entrar directo.", null, "La sesión: rol, nombre e ids"],
           ["POST", "/api/auth/logout", ["sesion"], "Cerrar sesión: el servidor marca el token como revocado y deja de servir.", null, "204 (sin contenido)"],
           ["PATCH", "/api/auth/contrasena", ["sesion"], "Cambiar la contraseña. Corta todas las otras sesiones de la cuenta.", "{ actual, nueva }", "204"],
           ["POST", "/api/auth/registro/dni", ["publica"], "Lee el código del DNI escaneado con la cámara y avisa si ese DNI ya tiene cuenta. No guarda nada.", "{ codigo }", "{ dni, nombre, apellido }"],
@@ -1894,11 +2075,10 @@
         ]
       },
       {
-        titulo: "Sesión y catálogos", archivo: "rutas/catalogos.ts", rutas: [
-          ["GET", "/api/sesion", ["sesion"], "“¿Este token sigue valiendo?”. La app la usa al abrirse para entrar directo.", null, "La sesión: rol, nombre e ids"],
-          ["GET", "/api/planes", ["publica"], "Las obras sociales con sus planes. Las usa el registro y Mi perfil.", null, "[{ obra social, planes }]"],
-          ["GET", "/api/especialidades", ["publica"], "Las 78 especialidades, cada una con su profesión.", null, "[{ id, nombre, profesion, … }]"],
-          ["GET", "/api/profesiones", ["publica"], "Las profesiones del padrón (Médico, Enfermero, Kinesiólogo…).", null, "[profesiones]"],
+        titulo: "Catálogos", archivo: "rutas/catalogos.ts", rutas: [
+          ["GET", "/api/catalogos/planes", ["publica"], "Las obras sociales con sus planes. Las usa el registro y Mi perfil.", null, "[{ obra social, planes }]"],
+          ["GET", "/api/catalogos/especialidades", ["publica"], "Las 78 especialidades, cada una con su profesión y sus subespecialidades.", null, "[{ id, nombre, profesion, subespecialidades }]"],
+          ["GET", "/api/catalogos/profesiones", ["publica"], "Las profesiones del padrón (Médico, Enfermero, Kinesiólogo…).", null, "[profesiones]"],
         ]
       },
       {
@@ -1923,14 +2103,14 @@
       },
       {
         titulo: "Profesionales", archivo: "rutas/medicos.ts", rutas: [
-          ["GET", "/api/medicos?especialidad=&sede=&q=", ["sesion"], "Buscar profesionales. A un paciente solo le muestra los que atienden su cobertura.", null, "[profesionales]"],
+          ["GET", "/api/medicos?sede=", ["sesion"], "Los profesionales activos. A un paciente solo le muestra los que atienden su cobertura; con sede, solo los que atienden ahí (la tarjeta del mapa).", null, "[profesionales]"],
           ["GET", "/api/medicos/:id", ["sesion"], "El perfil público de un profesional.", null, "El profesional"],
           ["GET", "/api/medicos/yo", ["doctor"], "Tu perfil de profesional.", null, "El profesional"],
           ["PUT", "/api/medicos/yo/coberturas", ["doctor"], "Las coberturas que atendés. Reemplaza la lista entera.", "{ coberturas: [{ obraSocialId, planesIds? }] }", "El profesional actualizado"],
           ["PUT", "/api/medicos/yo/lugares", ["doctor"], "Dónde atendés. Solo lugares públicos o que aceptan alguna de tus coberturas.", "{ sedeIds }", "El profesional actualizado"],
           ["GET", "/api/medicos/yo/franjas", ["doctor"], "Tus horarios de atención (Mis horarios).", null, "[{ sedeId, diaSemana, desde, hasta }]"],
           ["PUT", "/api/medicos/yo/franjas", ["doctor"], "Guardar tus horarios. Reemplaza todos.", "{ franjas: [{ sedeId, diaSemana, desde, hasta }] }", "[franjas]"],
-          ["GET", "/api/medicos/yo/agenda?desde=&hasta=", ["doctor"], "Tus turnos, con el paciente (y su foto), el lugar y la institución.", null, "[turnos]"],
+          ["GET", "/api/medicos/yo/agenda", ["doctor"], "Todos tus turnos, pasados y futuros, con el paciente (y su foto), el lugar y la institución. La app arma el calendario del mes.", null, "[turnos]"],
           ["GET", "/api/medicos/yo/pacientes", ["doctor"], "Tus pacientes asignados: los que tienen un turno próximo con vos.", null, "[pacientes]"],
           ["GET", "/api/medicos/yo/pacientes/:pacienteId/ordenes", ["doctor"], "Ficha del paciente: las órdenes que le diste. Si no es tu paciente, 404.", null, "[órdenes]"],
           ["GET", "/api/medicos/yo/pacientes/:pacienteId/recetas", ["doctor"], "Ficha del paciente: las recetas que le diste.", null, "[recetas]"],
@@ -1961,7 +2141,7 @@
       },
       {
         titulo: "Instituciones y sedes", archivo: "rutas/instituciones.ts", rutas: [
-          ["GET", "/api/instituciones?tipos=&lat=&lng=&radioKm=&limite=&sedes=", ["paciente"], "Los centros que podés usar (públicos y los que aceptan tu plan), para el mapa y la reserva.", null, "[instituciones]"],
+          ["GET", "/api/instituciones?tipos=&lat=&lng=&sedes=", ["paciente"], "Los centros que podés usar (públicos y los que aceptan tu plan), para el mapa y la reserva. Con tu ubicación, ordenados del más cercano al más lejano.", null, "[{ institucion, sede, distanciaKm?, motivo }]"],
           ["GET", "/api/instituciones/:id", ["sesion"], "Una institución con sus sedes y las coberturas que acepta.", null, "La institución"],
           ["GET", "/api/sedes/buscar?q=", ["sesion"], "El profesional busca dónde atiende: lugares públicos y los que aceptan alguna de sus coberturas.", null, "[sedes]"],
           ["GET", "/api/sedes?ids=", ["sesion"], "Varias sedes con su institución (los lugares de un profesional).", null, "[sedes]"],
@@ -1986,7 +2166,7 @@
         titulo: "Administrador", archivo: "rutas/admin.ts", rutas: [
           ["GET", "/api/admin/estadisticas", ["admin"], "Cuántas personas usan la app y pacientes por obra social (el Panel).", null, "{ uso, porObraSocial }"],
           ["GET", "/api/admin/metricas", ["admin"], "Turnos por estado, especialidad e institución, valoración media y mejor valorados (Métricas).", null, "Las métricas"],
-          ["GET", "/api/admin/instituciones?q=", ["admin"], "Todas las instituciones, primero las que tienen coberturas cargadas.", null, "[instituciones]"],
+          ["GET", "/api/admin/instituciones", ["admin"], "Todas las instituciones activas, primero las que tienen coberturas cargadas. El buscador de la pantalla filtra en la app.", null, "[instituciones]"],
           ["POST", "/api/admin/instituciones", ["admin"], "Dar de alta una institución con su sede y sus coberturas.", "{ nombre, tipo, direccion, ciudad, telefono?, latitud, longitud, coberturas, fuente, fuenteUrl?, verificadoEl }", "201 la institución"],
           ["PUT", "/api/admin/instituciones/:id/coberturas", ["admin"], "Reemplazar qué coberturas acepta una institución, siempre con fuente y fecha.", "{ coberturas, fuente, fuenteUrl?, verificadoEl }", "La institución"],
           ["POST", "/api/admin/planes", ["admin"], "Agregar un plan (y la obra social, si todavía no existe).", "{ obraSocial, plan? }", "201 el plan"],
