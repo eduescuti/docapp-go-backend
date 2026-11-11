@@ -1,5 +1,5 @@
 // Datos iniciales de la base: los mismos que los mocks del frontend, con los mismos ids, para que la app
-// muestre lo mismo con backend y sin él mientras se conecta módulo por módulo (03-base-de-datos.md#datos-iniciales-seed).
+// muestre lo mismo con backend y sin él mientras se conecta módulo por módulo.
 //
 // `npm run db:seed` BORRA todo lo que haya en la base y la vuelve a cargar. Es para la base de desarrollo.
 import "dotenv/config";
@@ -10,9 +10,10 @@ import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { hashearContrasena } from "./servicios/sesion/contrasenas";
+import type { FichaPadron } from "./servicios/sesion/refeps";
 import { CARPETA_FOTOS } from "./servicios/usuarios/fotos";
 import { prisma } from "./utils/db";
-import { hoyArgentina } from "./utils/tiempo";
+import { hoyArgentina, MS_DIA, sumarDias } from "./utils/tiempo";
 
 // ───────────── Forma de prisma/datos/demo.json (exportado de los mocks del frontend) ─────────────
 
@@ -36,19 +37,7 @@ interface DatosDemo {
     fuenteCoberturas?: { fuente: string; fuenteUrl?: string; verificadoEl: string };
     sedes: { id: string; institucionId: string; nombre: string; direccion: string; ciudad: string; latitud: number; longitud: number; telefono?: string; refesId?: string }[];
   }[];
-  padron: {
-    codigoProfesional: string;
-    dni: string;
-    nombre: string;
-    apellido: string;
-    profesion: string;
-    especializaciones: string[];
-    emisor: string;
-    provincia: string;
-    matricula: string;
-    estadoMatricula: string;
-    activo: boolean;
-  }[];
+  padron: FichaPadron[];
   medicos: {
     id: string;
     dni: string;
@@ -133,8 +122,6 @@ const CARPETA_FOTOS_DEMO = path.join(RAIZ, "prisma", "datos", "fotos");
 
 // ───────────── Fechas: los mocks son relativos a "hoy"; se corren de generadoEl a la fecha del seed ─────────────
 
-const MS_DIA = 24 * 60 * 60 * 1000;
-
 function diasEntre(desdeIso: string, hastaIso: string): number {
   return Math.round((Date.parse(`${hastaIso}T00:00:00Z`) - Date.parse(`${desdeIso}T00:00:00Z`)) / MS_DIA);
 }
@@ -142,7 +129,7 @@ function diasEntre(desdeIso: string, hastaIso: string): number {
 /** Corre "yyyy-MM-dd" (o "yyyy-MM-ddTHH:mm") la cantidad de días indicada, sin tocar la hora. */
 function correrFecha(fecha: string, dias: number): string {
   const [dia, hora] = fecha.split("T");
-  const corrida = new Date(Date.parse(`${dia}T00:00:00Z`) + dias * MS_DIA).toISOString().slice(0, 10);
+  const corrida = sumarDias(dia, dias);
   return hora ? `${corrida}T${hora}` : corrida;
 }
 

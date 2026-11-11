@@ -1,9 +1,6 @@
 # Reglas de negocio en el backend
 
-Lo que tiene que garantizar cada servicio. Las reglas numeradas son las del §10 del `CLAUDE.md` del
-workspace; las del Sprint 2 salen de las notas de planificación. El frontend ya aplica todas estas reglas
-en sus services con datos de prueba: el backend las tiene que aplicar **de verdad**, porque la app se
-puede saltear llamando a la API directo.
+Lo que tiene que garantizar cada servicio. Las del Sprint 2 salen de las notas de planificación. El frontend ya aplica todas estas reglas en sus services con datos de prueba: el backend las tiene que aplicar **de verdad**, porque la app se puede saltear llamando a la API directo.
 
 ## Turnos
 
@@ -46,6 +43,11 @@ No puede haber otro turno **activo** (`pendiente` o `confirmado`) con la misma
    ([03-base-de-datos.md](03-base-de-datos.md#sql-extra-de-la-migración)). Si dos pedidos llegan juntos y
    los dos pasan el paso 1, el segundo `INSERT` falla con `P2002` → `409`.
 
+**Un paciente, un turno por horario** (decidido el 11/11/2026): un paciente no puede tener dos turnos activos a la
+misma fecha y hora, aunque sean con profesionales o en lugares distintos. Igual que lo anterior, lo revisa el
+servicio (`409` "Ya tenés otro turno ese día a esa hora.") y lo garantiza la base con el índice
+`turnos_paciente_activo`. Además, la disponibilidad no le ofrece esas horas, así que en la reserva ni aparecen.
+
 ```ts
 // src/servicios/turnos/turnos.ts (idea)
 export async function reservar(paciente: Paciente, datos: { medicoId: string; sedeId: string; fecha: string; hora: string }) {
@@ -71,9 +73,10 @@ export async function reservar(paciente: Paciente, datos: { medicoId: string; se
 ### Reprogramar (decidido el 27/10/2026)
 
 No hay estado `reprogramado`. "Reprogramar" en el detalle del turno abre la reserva con **el mismo
-profesional**; al confirmar, `POST /api/turnos/:id/reprogramar` hace en **una sola transacción**: el turno
+profesional**; al confirmar, `POST /api/turnos` con `reprogramadoDesdeId` hace en **una sola transacción**: el turno
 viejo pasa a `cancelado` y se crea el nuevo (`pendiente`, con `reprogramadoDesdeId`). Si el nuevo horario
-está tomado, no se cancela nada. Rige el mismo plazo que para cancelar: **24 h antes**. El profesional ve
+está tomado, no se cancela nada. No hay una ruta propia (`/reprogramar` sería un verbo en la URL): reprogramar es
+crear un turno que viene de otro, y al profesional le llega `turno_reprogramado`. Rige el mismo plazo que para cancelar: **24 h antes**. El profesional ve
 el turno nuevo como pendiente y lo confirma o rechaza como cualquier otro.
 
 ### Plazo para cancelar o reprogramar
@@ -87,7 +90,7 @@ responde `409` y la app muestra los botones deshabilitados con un aviso.
 El perfil del médico no muestra horarios, pero la disponibilidad necesita saber cuándo atiende cada uno.
 Por eso el profesional carga sus **franjas de atención** en su **Agenda** (`franjas_atencion`): por cada
 lugar de atención, qué días de la semana y de qué hora a qué hora. Es la "gestión de disponibilidad" del
-MVP del profesional (CLAUDE.md §12).
+MVP del profesional.
 
 - `desde` y `hasta` son múltiplos de 30 min; se ofrecen turnos de **30 minutos** dentro de cada franja.
 - Las franjas de un mismo profesional **no se pisan** el mismo día, aunque sean en lugares distintos (no
@@ -197,7 +200,7 @@ function aceptaPlan(coberturas: { obraSocialId: string; planMedicoId: string | n
   especialidad, descripción, **lugares de atención** (`medicos_sedes`) y **coberturas que atiende**
   (`medicos_coberturas`), que **elige el propio profesional** (`PUT /api/medicos/yo/coberturas`).
 - **No tiene horarios de atención.**
-- **Lugares según sus coberturas** (decidido el 28/10/2026): al buscar dónde atiende (`GET /api/sedes/buscar`) solo
+- **Lugares según sus coberturas** (decidido el 28/10/2026): al buscar dónde atiende (`GET /api/sedes?q=`) solo
   le aparecen los públicos (regla 15) y los privados que aceptan alguna de sus coberturas: la misma obra social y,
   si los dos la limitan a planes, algún plan en común. `PUT /api/medicos/yo/lugares` rechaza un lugar **nuevo** que
   no cumpla; los que ya tenía se conservan aunque después cambie sus coberturas (sacarlos borraría sus horarios).
@@ -271,15 +274,17 @@ Las genera el servidor cuando pasa algo, en la misma transacción que el cambio:
 
 | Evento | Para | Tipo |
 |---|---|---|
+| El paciente pide un turno (11/11/2026) | Médico | `turno_solicitado` |
+| El paciente reprograma (11/11/2026) | Médico | `turno_reprogramado` |
 | El médico confirma un turno | Paciente | `turno_confirmado` |
 | El médico rechaza un turno (o vence sin confirmar: lo avisa el vencimiento automático) | Paciente | `turno_rechazado` |
 | El paciente cancela | Médico | `turno_cancelado` |
 | Se crea una orden | Paciente | `nueva_orden` |
 | Se crea una receta | Paciente | `nueva_receta` |
 
-`recordatorio_turno`, `turno_reprogramado` y `resultado_disponible` están declarados pero todavía no se generan: no
-hay recordatorios programados, reprogramar no le avisa al profesional (lo ve en su Agenda) y los resultados vienen del
-seed. Pedir un turno tampoco avisa: el profesional lo ve en su Agenda.
+`recordatorio_turno` y `resultado_disponible` están declarados pero todavía no se generan: no hay recordatorios
+programados y los resultados vienen del seed. Los avisos de un turno llevan `referenciaTipo: "turno"` y su
+`referenciaId`: el profesional, al tocar uno, va a la ficha de ese paciente para confirmarlo o rechazarlo.
 
 **Push (29/10/2026).** Además de guardarse en `notificaciones` (la lista de la campana), cada aviso llega al teléfono
 con Firebase Cloud Messaging:
@@ -292,7 +297,8 @@ con Firebase Cloud Messaging:
   pierde.
 - Un teléfono recibe solo los avisos de quien tiene la sesión abierta ahí: al guardar un token se le saca a cualquier
   otra sesión que lo tuviera, y al cerrar sesión deja de recibir.
-- El profesional todavía no tiene pantalla de notificaciones en la app: le llegan solo como push.
+- El profesional ve sus avisos en la campana de su Inicio (11/11/2026), además del push. No tiene una página aparte:
+  el panel de la campana muestra todos.
 
 ## Quién ve qué (regla 8)
 

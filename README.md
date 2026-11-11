@@ -7,13 +7,11 @@ Trabajo práctico de **Programación de Apps Móviles (UCA)**.
 - **Backend (este repo):** [eduescuti/docapp-go-backend](https://github.com/eduescuti/docapp-go-backend)
 
 La materia pide el frontend y el backend en **dos repositorios separados**. El contexto completo
-del proyecto (dominio, reglas de negocio, roles) está en el `CLAUDE.md` del workspace.
+del proyecto (dominio, reglas de negocio, roles) está en docs del workspace.
 
 ## Stack
 
-Node.js + TypeScript con **Express 5**, **Prisma 6** y **SQLite**, con la misma estructura que la práctica
-de la cátedra (`Practica17926`). Sesiones, roles, validación y reglas de negocio se escriben a mano
-(decidido el 27/10/2026; antes era `node:http` sin framework).
+Node.js + TypeScript con **Express 5**, **Prisma 6** y **SQLite**, con la misma estructura que la práctica de la cátedra (`Practica17926`). Sesiones, roles, validación y reglas de negocio se escriben a mano (decidido el 27/10/2026; antes era `node:http` sin framework).
 
 ## Estructura
 

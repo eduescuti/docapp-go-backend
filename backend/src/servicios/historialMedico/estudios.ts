@@ -11,7 +11,7 @@ import { conAviso } from "../notificaciones/notificaciones";
 import type { UsuarioDeSesion } from "../sesion/sesiones";
 import { exigirVinculo } from "../usuarios/notas";
 
-// Órdenes y resultados (06-reglas-de-negocio.md#órdenes). Los resultados vienen solo del seed este sprint.
+// Órdenes y resultados. Los resultados vienen solo del seed este sprint.
 
 const CARPETA_UPLOADS = path.resolve(__dirname, "..", "..", "..", "uploads");
 const MAXIMO_ESTUDIOS = 30;

@@ -124,7 +124,6 @@ CREATE TABLE "pacientes" (
 CREATE TABLE "pacientes_medicos_favoritos" (
     "pacienteId" TEXT NOT NULL,
     "medicoId" TEXT NOT NULL,
-
     PRIMARY KEY ("pacienteId", "medicoId"),
     CONSTRAINT "pacientes_medicos_favoritos_pacienteId_fkey" FOREIGN KEY ("pacienteId") REFERENCES "pacientes" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "pacientes_medicos_favoritos_medicoId_fkey" FOREIGN KEY ("medicoId") REFERENCES "medicos" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -134,7 +133,6 @@ CREATE TABLE "pacientes_medicos_favoritos" (
 CREATE TABLE "pacientes_instituciones_favoritas" (
     "pacienteId" TEXT NOT NULL,
     "institucionId" TEXT NOT NULL,
-
     PRIMARY KEY ("pacienteId", "institucionId"),
     CONSTRAINT "pacientes_instituciones_favoritas_pacienteId_fkey" FOREIGN KEY ("pacienteId") REFERENCES "pacientes" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "pacientes_instituciones_favoritas_institucionId_fkey" FOREIGN KEY ("institucionId") REFERENCES "instituciones" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -193,7 +191,6 @@ CREATE TABLE "subespecialidades" (
 CREATE TABLE "medicos_sedes" (
     "medicoId" TEXT NOT NULL,
     "sedeId" TEXT NOT NULL,
-
     PRIMARY KEY ("medicoId", "sedeId"),
     CONSTRAINT "medicos_sedes_medicoId_fkey" FOREIGN KEY ("medicoId") REFERENCES "medicos" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "medicos_sedes_sedeId_fkey" FOREIGN KEY ("sedeId") REFERENCES "sedes" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -349,140 +346,158 @@ CREATE TABLE "notificaciones" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "usuarios_dni_key" ON "usuarios"("dni");
+CREATE UNIQUE INDEX "usuarios_dni_key" ON "usuarios" ("dni");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sesiones_tokenHash_key" ON "sesiones"("tokenHash");
+CREATE UNIQUE INDEX "sesiones_tokenHash_key" ON "sesiones" ("tokenHash");
 
 -- CreateIndex
-CREATE INDEX "sesiones_usuarioId_idx" ON "sesiones"("usuarioId");
+CREATE INDEX "sesiones_usuarioId_idx" ON "sesiones" ("usuarioId");
 
 -- CreateIndex
-CREATE INDEX "registro_auditoria_usuarioId_creadoEn_idx" ON "registro_auditoria"("usuarioId", "creadoEn");
+CREATE INDEX "registro_auditoria_usuarioId_creadoEn_idx" ON "registro_auditoria" ("usuarioId", "creadoEn");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "claves_integracion_claveHash_key" ON "claves_integracion"("claveHash");
+CREATE UNIQUE INDEX "claves_integracion_claveHash_key" ON "claves_integracion" ("claveHash");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "obras_sociales_nombre_key" ON "obras_sociales"("nombre");
+CREATE UNIQUE INDEX "obras_sociales_nombre_key" ON "obras_sociales" ("nombre");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "planes_medicos_obraSocialId_nombre_key" ON "planes_medicos"("obraSocialId", "nombre");
+CREATE UNIQUE INDEX "planes_medicos_obraSocialId_nombre_key" ON "planes_medicos" ("obraSocialId", "nombre");
 
 -- CreateIndex
-CREATE INDEX "instituciones_coberturas_obraSocialId_idx" ON "instituciones_coberturas"("obraSocialId");
+CREATE INDEX "instituciones_coberturas_obraSocialId_idx" ON "instituciones_coberturas" ("obraSocialId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "instituciones_coberturas_institucionId_obraSocialId_planMedicoId_key" ON "instituciones_coberturas"("institucionId", "obraSocialId", "planMedicoId");
+CREATE UNIQUE INDEX "instituciones_coberturas_institucionId_obraSocialId_planMedicoId_key" ON "instituciones_coberturas" (
+    "institucionId",
+    "obraSocialId",
+    "planMedicoId"
+);
 
 -- CreateIndex
-CREATE INDEX "instituciones_origen_idx" ON "instituciones"("origen");
+CREATE INDEX "instituciones_origen_idx" ON "instituciones" ("origen");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sedes_refesId_key" ON "sedes"("refesId");
+CREATE UNIQUE INDEX "sedes_refesId_key" ON "sedes" ("refesId");
 
 -- CreateIndex
-CREATE INDEX "sedes_institucionId_idx" ON "sedes"("institucionId");
+CREATE INDEX "sedes_institucionId_idx" ON "sedes" ("institucionId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "pacientes_usuarioId_key" ON "pacientes"("usuarioId");
+CREATE UNIQUE INDEX "pacientes_usuarioId_key" ON "pacientes" ("usuarioId");
 
 -- CreateIndex
-CREATE INDEX "pacientes_planMedicoId_idx" ON "pacientes"("planMedicoId");
+CREATE INDEX "pacientes_planMedicoId_idx" ON "pacientes" ("planMedicoId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "profesionales_padron_codigoProfesional_key" ON "profesionales_padron"("codigoProfesional");
+CREATE UNIQUE INDEX "profesionales_padron_codigoProfesional_key" ON "profesionales_padron" ("codigoProfesional");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "profesionales_padron_dni_matricula_profesion_key" ON "profesionales_padron"("dni", "matricula", "profesion");
+CREATE UNIQUE INDEX "profesionales_padron_dni_matricula_profesion_key" ON "profesionales_padron" (
+    "dni",
+    "matricula",
+    "profesion"
+);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "medicos_usuarioId_key" ON "medicos"("usuarioId");
+CREATE UNIQUE INDEX "medicos_usuarioId_key" ON "medicos" ("usuarioId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "medicos_padronId_key" ON "medicos"("padronId");
+CREATE UNIQUE INDEX "medicos_padronId_key" ON "medicos" ("padronId");
 
 -- CreateIndex
-CREATE INDEX "medicos_especialidadId_idx" ON "medicos"("especialidadId");
+CREATE INDEX "medicos_especialidadId_idx" ON "medicos" ("especialidadId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "medicos_matricula_profesion_key" ON "medicos"("matricula", "profesion");
+CREATE UNIQUE INDEX "medicos_matricula_profesion_key" ON "medicos" ("matricula", "profesion");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "especialidades_nombre_key" ON "especialidades"("nombre");
+CREATE UNIQUE INDEX "especialidades_nombre_key" ON "especialidades" ("nombre");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "subespecialidades_especialidadId_nombre_key" ON "subespecialidades"("especialidadId", "nombre");
+CREATE UNIQUE INDEX "subespecialidades_especialidadId_nombre_key" ON "subespecialidades" ("especialidadId", "nombre");
 
 -- CreateIndex
-CREATE INDEX "medicos_sedes_sedeId_idx" ON "medicos_sedes"("sedeId");
+CREATE INDEX "medicos_sedes_sedeId_idx" ON "medicos_sedes" ("sedeId");
 
 -- CreateIndex
-CREATE INDEX "franjas_atencion_medicoId_diaSemana_idx" ON "franjas_atencion"("medicoId", "diaSemana");
+CREATE INDEX "franjas_atencion_medicoId_diaSemana_idx" ON "franjas_atencion" ("medicoId", "diaSemana");
 
 -- CreateIndex
-CREATE INDEX "franjas_atencion_sedeId_idx" ON "franjas_atencion"("sedeId");
+CREATE INDEX "franjas_atencion_sedeId_idx" ON "franjas_atencion" ("sedeId");
 
 -- CreateIndex
-CREATE INDEX "medicos_coberturas_obraSocialId_idx" ON "medicos_coberturas"("obraSocialId");
+CREATE INDEX "medicos_coberturas_obraSocialId_idx" ON "medicos_coberturas" ("obraSocialId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "medicos_coberturas_medicoId_obraSocialId_planMedicoId_key" ON "medicos_coberturas"("medicoId", "obraSocialId", "planMedicoId");
+CREATE UNIQUE INDEX "medicos_coberturas_medicoId_obraSocialId_planMedicoId_key" ON "medicos_coberturas" (
+    "medicoId",
+    "obraSocialId",
+    "planMedicoId"
+);
 
 -- CreateIndex
-CREATE INDEX "notas_paciente_medicoId_pacienteId_idx" ON "notas_paciente"("medicoId", "pacienteId");
+CREATE INDEX "notas_paciente_medicoId_pacienteId_idx" ON "notas_paciente" ("medicoId", "pacienteId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "turnos_reprogramadoDesdeId_key" ON "turnos"("reprogramadoDesdeId");
+CREATE UNIQUE INDEX "turnos_reprogramadoDesdeId_key" ON "turnos" ("reprogramadoDesdeId");
 
 -- CreateIndex
-CREATE INDEX "turnos_pacienteId_fecha_idx" ON "turnos"("pacienteId", "fecha");
+CREATE INDEX "turnos_pacienteId_fecha_idx" ON "turnos" ("pacienteId", "fecha");
 
 -- CreateIndex
-CREATE INDEX "turnos_medicoId_fecha_idx" ON "turnos"("medicoId", "fecha");
+CREATE INDEX "turnos_medicoId_fecha_idx" ON "turnos" ("medicoId", "fecha");
 
 -- CreateIndex
-CREATE INDEX "turnos_estado_fecha_idx" ON "turnos"("estado", "fecha");
+CREATE INDEX "turnos_estado_fecha_idx" ON "turnos" ("estado", "fecha");
 
 -- CreateIndex
-CREATE INDEX "ordenes_pacienteId_archivadoEl_idx" ON "ordenes"("pacienteId", "archivadoEl");
+CREATE INDEX "ordenes_pacienteId_archivadoEl_idx" ON "ordenes" ("pacienteId", "archivadoEl");
 
 -- CreateIndex
-CREATE INDEX "ordenes_medicoId_pacienteId_idx" ON "ordenes"("medicoId", "pacienteId");
+CREATE INDEX "ordenes_medicoId_pacienteId_idx" ON "ordenes" ("medicoId", "pacienteId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "orden_estudios_ordenId_posicion_key" ON "orden_estudios"("ordenId", "posicion");
+CREATE UNIQUE INDEX "orden_estudios_ordenId_posicion_key" ON "orden_estudios" ("ordenId", "posicion");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "resultados_archivoRuta_key" ON "resultados"("archivoRuta");
+CREATE UNIQUE INDEX "resultados_archivoRuta_key" ON "resultados" ("archivoRuta");
 
 -- CreateIndex
-CREATE INDEX "resultados_ordenId_idx" ON "resultados"("ordenId");
+CREATE INDEX "resultados_ordenId_idx" ON "resultados" ("ordenId");
 
 -- CreateIndex
-CREATE INDEX "recetas_pacienteId_vigenteHasta_idx" ON "recetas"("pacienteId", "vigenteHasta");
+CREATE INDEX "recetas_pacienteId_vigenteHasta_idx" ON "recetas" ("pacienteId", "vigenteHasta");
 
 -- CreateIndex
-CREATE INDEX "recetas_medicoId_pacienteId_idx" ON "recetas"("medicoId", "pacienteId");
+CREATE INDEX "recetas_medicoId_pacienteId_idx" ON "recetas" ("medicoId", "pacienteId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "feedbacks_turnoId_key" ON "feedbacks"("turnoId");
+CREATE UNIQUE INDEX "feedbacks_turnoId_key" ON "feedbacks" ("turnoId");
 
 -- CreateIndex
-CREATE INDEX "notificaciones_usuarioId_leida_idx" ON "notificaciones"("usuarioId", "leida");
+CREATE INDEX "notificaciones_usuarioId_leida_idx" ON "notificaciones" ("usuarioId", "leida");
 
 -- ───────────── SQL extra (docs/03-base-de-datos.md#sql-extra-de-la-migración) ─────────────
 -- Prisma no declara índices parciales ni restricciones de valores en SQLite: van a mano.
 -- Regla 4: fecha + hora + hospital + especialidad + médico, única entre los turnos activos.
 -- Un turno cancelado o rechazado (o ya completado) deja de contar y libera el horario.
-CREATE UNIQUE INDEX "turnos_combinacion_activa"
-  ON "turnos" ("fecha", "hora", "sedeId", "especialidadId", "medicoId")
-  WHERE "estado" IN ('pendiente', 'confirmado');
+CREATE UNIQUE INDEX "turnos_combinacion_activa" ON "turnos" (
+    "fecha",
+    "hora",
+    "sedeId",
+    "especialidadId",
+    "medicoId"
+)
+WHERE
+    "estado" IN ('pendiente', 'confirmado');
 
 -- Un profesional no puede tener dos turnos activos a la misma fecha y hora, aunque sea en otro lugar.
-CREATE UNIQUE INDEX "turnos_medico_activo"
-  ON "turnos" ("medicoId", "fecha", "hora")
-  WHERE "estado" IN ('pendiente', 'confirmado');
+CREATE UNIQUE INDEX "turnos_medico_activo" ON "turnos" ("medicoId", "fecha", "hora")
+WHERE
+    "estado" IN ('pendiente', 'confirmado');
 
 -- Franjas: día de la semana válido y desde < hasta (formato "HH:mm", se compara como texto).
 CREATE TRIGGER "franjas_validas_ins" BEFORE INSERT ON "franjas_atencion"
@@ -491,10 +506,16 @@ BEGIN SELECT RAISE(ABORT, 'franja inválida'); END;
 
 -- Coberturas (08-coberturas.md): en SQLite los NULL no chocan en un UNIQUE, así que la fila
 -- "todos los planes" (planMedicoId NULL) necesita su propio índice parcial.
-CREATE UNIQUE INDEX "instituciones_coberturas_todos_los_planes"
-  ON "instituciones_coberturas" ("institucionId", "obraSocialId") WHERE "planMedicoId" IS NULL;
-CREATE UNIQUE INDEX "medicos_coberturas_todos_los_planes"
-  ON "medicos_coberturas" ("medicoId", "obraSocialId") WHERE "planMedicoId" IS NULL;
+CREATE UNIQUE INDEX "instituciones_coberturas_todos_los_planes" ON "instituciones_coberturas" (
+    "institucionId",
+    "obraSocialId"
+)
+WHERE
+    "planMedicoId" IS NULL;
+
+CREATE UNIQUE INDEX "medicos_coberturas_todos_los_planes" ON "medicos_coberturas" ("medicoId", "obraSocialId")
+WHERE
+    "planMedicoId" IS NULL;
 
 -- El plan de una cobertura tiene que ser de esa obra social.
 CREATE TRIGGER "instituciones_coberturas_plan_de_la_obra_social" BEFORE INSERT ON "instituciones_coberturas"

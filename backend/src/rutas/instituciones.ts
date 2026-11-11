@@ -3,14 +3,11 @@ import { Router } from "express";
 import { autenticar, pacienteIdDe, requerirRol, usuarioDe } from "../middlewares/autenticar";
 import * as servicio from "../servicios/catalogos/instituciones";
 import { ErrorHttp } from "../utils/errores";
+import { listaDeQuery } from "../utils/validacion";
 
 /** Dos recursos del mismo tema, cada uno con su prefijo; cada ruta pide sesión. */
 export const instituciones = Router();
 export const sedes = Router();
-
-/** "a,b,c" → ["a","b","c"] (como mucho 200). */
-const lista = (valor: unknown) =>
-  typeof valor === "string" && valor.trim() ? valor.split(",").map((v) => v.trim()).filter(Boolean).slice(0, 200) : undefined;
 
 function numero(valor: unknown, campo: string): number | undefined {
   if (valor === undefined || valor === "") return undefined;
@@ -26,9 +23,9 @@ instituciones.get("/", autenticar, requerirRol("paciente"), async (req, res) => 
   res.json(
     await servicio.buscarCentros({
       pacienteId: pacienteIdDe(req),
-      tipos: lista(req.query.tipos),
+      tipos: listaDeQuery(req.query.tipos, 200),
       cerca: lat !== undefined && lng !== undefined ? { latitud: lat, longitud: lng } : undefined,
-      sedeIds: lista(req.query.sedes),
+      sedeIds: listaDeQuery(req.query.sedes, 200),
     }),
   );
 });
@@ -38,15 +35,14 @@ instituciones.get("/:id", autenticar, async (req, res) => {
   res.json(await servicio.obtenerInstitucion(String(req.params.id)));
 });
 
-// GET /api/sedes/buscar?q= → lugares por nombre (el profesional elige dónde atiende: solo los públicos y los que
-// aceptan alguna de sus coberturas).
-sedes.get("/buscar", autenticar, async (req, res) => {
-  res.json(
-    await servicio.buscarLugares(typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "", usuarioDe(req).medico?.id),
-  );
-});
-
-// GET /api/sedes?ids= → cada sede con su institución (lugares de atención de un profesional).
+// GET /api/sedes → cada sede con su institución. Buscar es filtrar el listado, así que no hay ruta "/buscar":
+//  - ?q=texto → por nombre o dirección (el profesional elige dónde atiende: solo los públicos y los que aceptan
+//    alguna de sus coberturas).
+//  - ?ids=a,b → esas sedes, en ese orden (lugares de atención de un profesional).
 sedes.get("/", autenticar, async (req, res) => {
-  res.json(await servicio.lugaresDeAtencion(lista(req.query.ids) ?? []));
+  if (typeof req.query.q === "string") {
+    res.json(await servicio.buscarLugares(req.query.q.slice(0, 100), usuarioDe(req).medico?.id));
+    return;
+  }
+  res.json(await servicio.lugaresDeAtencion(listaDeQuery(req.query.ids, 200) ?? []));
 });

@@ -13,8 +13,8 @@ import { pacientes } from "./pacientes";
 import { turnos } from "./turnos";
 
 /**
- * El mapa de la API. Cada línea es prefijo + router: `api.use("/auth", auth)` junto con `auth.post("/login", ...)`
- * es POST /api/auth/login (el "/api" lo agrega index.ts). Cada router se crea con `Router()` en su archivo.
+ * El mapa de la API: cada línea es prefijo + router 
+ * Ejemplo: `api.use("/auth", auth)` + `auth.post("/login")` es POST /api/auth/login.
  */
 export const api = Router();
 

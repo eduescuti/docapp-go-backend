@@ -1,6 +1,3 @@
-// "Hoy" y "ahora" se calculan en la zona de Argentina, no en UTC: un turno de las 22:00 no puede vencer a las
-// 19:00 (02-arquitectura.md, "Fechas y horas"). Las fechas de negocio son texto ISO ("2026-10-27", "14:30").
-
 const FORMATO = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Argentina/Buenos_Aires",
   year: "numeric",
@@ -26,7 +23,7 @@ export function fechaHoraArgentina(fecha: Date): string {
   return `${dia}T${hora}`;
 }
 
-/** "2026-10-27" */
+/** Devuelve la fecha de hoy de Argentina (ej. "2026-10-27") */
 export const hoyArgentina = (): string => fechaArgentina(new Date());
 
 /** "2026-10-27 14:30", para comparar con `${fecha} ${hora}` de un turno. */
@@ -43,9 +40,11 @@ export function minutosHasta(fecha: string, hora: string): number {
 /** 0 = domingo … 6 = sábado, del día "yyyy-MM-dd". */
 export const diaDeLaSemana = (fecha: string): number => new Date(`${fecha}T12:00:00Z`).getUTCDay();
 
-/** El día siguiente, "yyyy-MM-dd". */
-export const diaSiguiente = (fecha: string): string =>
-  new Date(Date.parse(`${fecha}T12:00:00Z`) + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+export const MS_DIA = 24 * 60 * 60 * 1000;
+
+/** "yyyy-MM-dd" corrido esa cantidad de días (hacia atrás si es negativa). */
+export const sumarDias = (fecha: string, dias: number): string =>
+  new Date(Date.parse(`${fecha}T12:00:00Z`) + dias * MS_DIA).toISOString().slice(0, 10);
 
 /** "yyyy-MM-dd" válido. */
 export const esFecha = (texto: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(texto) && !Number.isNaN(Date.parse(`${texto}T00:00:00Z`));

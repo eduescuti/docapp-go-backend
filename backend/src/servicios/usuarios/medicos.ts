@@ -8,9 +8,7 @@ import { aMedico, CoberturaAceptada, INCLUIR_MEDICO } from "../formato";
 const MAXIMO_LUGARES = 30;
 
 interface FiltrosMedico {
-  /** Solo los que atienden en esa sede (tarjeta del mapa). */
   sedeId?: string;
-  /** Si busca un paciente: solo los que atienden su cobertura. */
   pacienteId?: string;
 }
 

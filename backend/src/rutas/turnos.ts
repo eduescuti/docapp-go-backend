@@ -6,7 +6,7 @@ import * as feedback from "../servicios/turnos/feedback";
 import * as servicio from "../servicios/turnos/turnos";
 import { ErrorHttp } from "../utils/errores";
 import { esFecha, esHoraDeTurno } from "../utils/tiempo";
-import { cuerpo, texto } from "../utils/validacion";
+import { cuerpo, listaDeQuery, texto, textoOpcional } from "../utils/validacion";
 
 export const turnos = Router();
 turnos.use(autenticar);
@@ -21,43 +21,35 @@ function hora(valor: unknown): string {
   return valor;
 }
 
-/** "?medicos=a,b" → ["a","b"] (sin el parámetro: todos los que le aparecen al paciente). */
-const medicos = (valor: unknown) => (typeof valor === "string" && valor ? valor.split(",").slice(0, 50) : undefined);
-
 // GET /api/turnos/disponibles?fecha=&medicos= → [{ medicoId, sedeId, hora }] libres ese día.
 turnos.get("/disponibles", requerirRol("paciente"), async (req, res) => {
-  res.json(await disponibilidad.horariosLibres(pacienteIdDe(req), fecha(req.query.fecha, "fecha"), medicos(req.query.medicos)));
+  res.json(await disponibilidad.horariosLibres(pacienteIdDe(req), fecha(req.query.fecha, "fecha"), listaDeQuery(req.query.medicos, 50)));
 });
 
 // GET /api/turnos/dias-con-turnos?desde=&hasta=&medicos= → ["2026-11-02", …]
 turnos.get("/dias-con-turnos", requerirRol("paciente"), async (req, res) => {
   res.json(
-    await disponibilidad.diasConTurnos(pacienteIdDe(req), fecha(req.query.desde, "desde"), fecha(req.query.hasta, "hasta"), medicos(req.query.medicos)),
+    await disponibilidad.diasConTurnos(pacienteIdDe(req), fecha(req.query.desde, "desde"), fecha(req.query.hasta, "hasta"), listaDeQuery(req.query.medicos, 50)),
   );
 });
 
-// POST /api/turnos { fecha, hora, sedeId, especialidadId, medicoId } → 201 turno pendiente. Son los 5 pasos de la
-// reserva, en orden: el backend revisa que la combinación entera sea válida.
+// POST /api/turnos → 201 turno pendiente (al profesional le llega la solicitud). Dos formas:
+//  - Reservar: { fecha, hora, sedeId, especialidadId, medicoId }. Son los 5 pasos de la reserva, en orden: el
+//    backend revisa que la combinación entera sea válida.
+//  - Reprogramar: { reprogramadoDesdeId, fecha, hora, sedeId }. Crea el turno nuevo con el mismo profesional y
+//    cancela el viejo, en una sola operación. No hay ruta propia: reprogramar es crear un turno que viene de otro.
 turnos.post("/", requerirRol("paciente"), async (req, res) => {
   const datos = cuerpo(req.body);
-  const turno = await servicio.reservar(pacienteIdDe(req), usuarioDe(req).id, {
-    especialidadId: texto(datos, "especialidadId", 80),
-    medicoId: texto(datos, "medicoId", 80),
-    sedeId: texto(datos, "sedeId", 80),
-    fecha: fecha(datos.fecha, "fecha"),
-    hora: hora(datos.hora),
-  });
-  res.status(201).json(turno);
-});
+  const lugarYHorario = { sedeId: texto(datos, "sedeId", 80), fecha: fecha(datos.fecha, "fecha"), hora: hora(datos.hora) };
 
-// POST /api/turnos/:id/reprogramar { sedeId, fecha, hora } → 201 turno nuevo (el viejo queda cancelado).
-turnos.post("/:id/reprogramar", requerirRol("paciente"), async (req, res) => {
-  const datos = cuerpo(req.body);
-  const turno = await servicio.reprogramar(pacienteIdDe(req), usuarioDe(req).id, String(req.params.id), {
-    sedeId: texto(datos, "sedeId", 80),
-    fecha: fecha(datos.fecha, "fecha"),
-    hora: hora(datos.hora),
-  });
+  const reprogramadoDesdeId = textoOpcional(datos, "reprogramadoDesdeId", 80);
+  const turno = reprogramadoDesdeId
+    ? await servicio.reprogramar(pacienteIdDe(req), usuarioDe(req).id, reprogramadoDesdeId, lugarYHorario)
+    : await servicio.reservar(pacienteIdDe(req), usuarioDe(req).id, {
+        ...lugarYHorario,
+        especialidadId: texto(datos, "especialidadId", 80),
+        medicoId: texto(datos, "medicoId", 80),
+      });
   res.status(201).json(turno);
 });
 

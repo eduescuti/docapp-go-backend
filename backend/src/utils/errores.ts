@@ -3,7 +3,7 @@ import type { ErrorRequestHandler } from "express";
 
 /**
  * Error con el status HTTP que corresponde. Los servicios lo tiran sin saber nada de Express y el manejador de
- * errores lo traduce a `{ error: mensaje }` (02-arquitectura.md, "Respuestas y errores").
+ * errores lo traduce a `{ error: mensaje }`.
  */
 export class ErrorHttp extends Error {
   constructor(

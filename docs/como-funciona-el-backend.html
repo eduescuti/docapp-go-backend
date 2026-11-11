@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Paleta del tema A de la app (modo claro, CLAUDE.md §7). */
+    /* Paleta del tema A de la app (modo claro). */
     :root {
       --background: #FFFFFF;
       --foreground: #0F172A;
@@ -1425,7 +1425,8 @@
           <ul>
             <li><code>db.ts</code> Prisma y el registro de auditoría</li>
             <li><code>errores.ts</code> <code>ErrorHttp</code> y <code>manejarErrores</code>: todo error →
-              <code>{ error }</code></li>
+              <code>{ error }</code>
+            </li>
             <li><code>validacion.ts</code> forma de lo que llega (DNI, textos)</li>
             <li><code>tiempo.ts</code> “hoy” y “ahora” en hora argentina</li>
           </ul>
@@ -1561,7 +1562,8 @@ async function misTurnos(pacienteId: string) {
         <div class="card">
           <h3 style="font-size:15px;margin-bottom:8px">En la app: <code>services/apiClient.ts</code></h3>
           <p style="margin:0 0 10px;color:var(--muted-fg);font-size:14px">Todos los pedidos salen de una sola función,
-            <code>pedir()</code>, que usan <code>api()</code> (respuestas JSON) y <code>apiArchivo()</code> (el PDF de un
+            <code>pedir()</code>, que usan <code>api()</code> (respuestas JSON) y <code>apiArchivo()</code> (el PDF de
+            un
             resultado). Ahí se manejan los casos generales para que ninguna pantalla los repita:
           </p>
           <div class="reglas" style="margin-top:0">
@@ -1671,8 +1673,9 @@ async function misTurnos(pacienteId: string) {
     <section id="rutas">
       <h2>Todas las rutas de la API</h2>
       <p class="bajada">Una <b>ruta</b> es una “puerta” del servidor: la app golpea una con un pedido y el servidor
-        responde. El backend tiene <b data-contar="71" class="cuenta-rutas">0</b> puertas, cada una con su archivo en
-        <code>src/rutas/</code>; el mapa con el prefijo de cada archivo está en <code>src/rutas/index.ts</code>. Tocá una
+        responde. El backend tiene <b data-contar="69" class="cuenta-rutas">0</b> puertas, cada una con su archivo en
+        <code>src/rutas/</code>; el mapa con el prefijo de cada archivo está en <code>src/rutas/index.ts</code>. Tocá
+        una
         para ver qué hace, quién la puede usar, qué le mandás y qué te devuelve.
       </p>
 
@@ -1757,15 +1760,19 @@ async function misTurnos(pacienteId: string) {
       <div class="card" style="margin-bottom:12px">
         <h3 style="font-size:15px;margin:0 0 4px">Cómo viaja un aviso</h3>
         <p style="margin:0;color:var(--muted-fg);font-size:14px">Cada vez que entrás (al abrir la app con la sesión
-          guardada, con contraseña, con huella o al registrarte), la app pide permiso de notificaciones y manda el token FCM del teléfono
+          guardada, con contraseña, con huella o al registrarte), la app pide permiso de notificaciones y manda el token
+          FCM del teléfono
           (<code>POST /api/notificaciones/fcm-token</code>, desde <code>registrarPushToken()</code>). Queda guardado en
           esa sesión: al cerrar sesión, el teléfono deja de recibir. En web no se registra.</p>
         <p style="margin:8px 0 0;color:var(--muted-fg);font-size:14px">Cuando pasa algo, el servicio usa
-          <code>conAviso()</code>: hace el cambio y guarda el aviso (<code>notificar()</code>) en la misma transacción y,
+          <code>conAviso()</code>: hace el cambio y guarda el aviso (<code>notificar()</code>) en la misma transacción
+          y,
           recién cuando terminó bien, <code>enviarPush()</code> lo manda sin hacer esperar la respuesta. Si el cambio se
           revierte, no sale ningún push. Va a cada teléfono del usuario por separado: si uno falla (por ejemplo, un
-          token viejo), los demás lo reciben igual.</p>
-        <div class="token" aria-hidden="true"><span>📝 cambio + notificar()</span><span class="flecha">→ commit →</span><span>📲
+          token viejo), los demás lo reciben igual.
+        </p>
+        <div class="token" aria-hidden="true"><span>📝 cambio + notificar()</span><span class="flecha">→ commit
+            →</span><span>📲
             enviarPush()</span><span class="flecha">→ FCM →</span><span>🔔 teléfono</span></div>
       </div>
       <div class="capas">
@@ -1781,8 +1788,12 @@ async function misTurnos(pacienteId: string) {
           </ul>
         </div>
         <div class="card capa aparece">
-          <h3>🩺 Profesional · 1</h3>
+          <h3>🩺 Profesional · 3</h3>
           <ul class="avisos">
+            <li><b>Nueva solicitud de turno</b> <code>turno_solicitado</code><span>Un paciente le pide un turno:
+                lo confirma o lo rechaza desde la ficha.</span></li>
+            <li><b>Turno reprogramado</b> <code>turno_reprogramado</code><span>Un paciente pasa su turno a otro
+                día u hora.</span></li>
             <li><b>Turno cancelado</b> <code>turno_cancelado</code><span>Un paciente cancela su turno; el horario
                 queda libre.</span></li>
           </ul>
@@ -1793,12 +1804,10 @@ async function misTurnos(pacienteId: string) {
         </div>
       </div>
       <div class="reglas">
-        <div class="regla"><span class="n">!</span><span>El profesional todavía <b>no tiene pantalla</b> de
-            notificaciones en la app: el aviso le llega solo como push.</span></div>
-        <div class="regla"><span class="n">!</span><span>Declarados pero sin generar: <code>turno_reprogramado</code>,
-            <code>recordatorio_turno</code> y <code>resultado_disponible</code>.</span></div>
-        <div class="regla"><span class="n">!</span><span>Pedir o reprogramar un turno <b>no le avisa</b> al
-            profesional: lo ve en su Agenda.</span></div>
+        <div class="regla"><span class="n">!</span><span>El profesional ve sus avisos en la <b>campana de su
+              Inicio</b> (además del push). Tocar uno abre la ficha de ese paciente.</span></div>
+        <div class="regla"><span class="n">!</span><span>Declarados pero sin generar: <code>recordatorio_turno</code>
+            y <code>resultado_disponible</code>.</span></div>
       </div>
     </section>
 
@@ -2070,7 +2079,7 @@ async function misTurnos(pacienteId: string) {
           ["PATCH", "/api/auth/contrasena", ["sesion"], "Cambiar la contraseña. Corta todas las otras sesiones de la cuenta.", "{ actual, nueva }", "204"],
           ["POST", "/api/auth/registro/dni", ["publica"], "Lee el código del DNI escaneado con la cámara y avisa si ese DNI ya tiene cuenta. No guarda nada.", "{ codigo }", "{ dni, nombre, apellido }"],
           ["POST", "/api/auth/registro/paciente", ["publica"], "Crea la cuenta del paciente y entra. DNI, nombre y apellido salen del código del DNI, no se escriben.", "{ codigoDni, password, planMedicoId }", "201 { token, expiraEn, sesion }"],
-          ["POST", "/api/auth/registro/profesional/verificar", ["publica"], "Busca al profesional en el padrón nacional (el paso “¿Esta es tu información?”).", "{ dni, matricula, profesion }", "La ficha del padrón"],
+          ["POST", "/api/auth/registro/profesional/verificacion", ["publica"], "Busca al profesional en el padrón nacional (el paso “¿Esta es tu información?”).", "{ dni, matricula, profesion }", "La ficha del padrón"],
           ["POST", "/api/auth/registro/profesional", ["publica"], "Crea la cuenta del profesional y entra. El DNI escaneado tiene que ser de la persona de la ficha.", "{ codigoDni, dni, matricula, profesion, password, genero, especialidadId }", "201 { token, expiraEn, sesion }"],
         ]
       },
@@ -2122,8 +2131,7 @@ async function misTurnos(pacienteId: string) {
         titulo: "Turnos", archivo: "rutas/turnos.ts", rutas: [
           ["GET", "/api/turnos/dias-con-turnos?desde=&hasta=&medicos=", ["paciente"], "Qué días tienen algún horario libre para vos.", null, "[\"2026-11-02\", …]"],
           ["GET", "/api/turnos/disponibles?fecha=&medicos=", ["paciente"], "Los horarios libres de un día, solo en lugares y con profesionales de tu cobertura.", null, "[{ medicoId, sedeId, hora }]"],
-          ["POST", "/api/turnos", ["paciente"], "Pedir un turno: los 5 pasos de la reserva. El servidor revisa la combinación entera y el turno nace pendiente.", "{ fecha, hora, sedeId, especialidadId, medicoId }", "201 el turno"],
-          ["POST", "/api/turnos/:id/reprogramar", ["paciente"], "Cancela el turno y reserva otro con el mismo profesional, en una sola operación. Hasta 24 h antes.", "{ sedeId, fecha, hora }", "201 el turno nuevo"],
+          ["POST", "/api/turnos", ["paciente"], "Pedir un turno: los 5 pasos de la reserva. El servidor revisa la combinación entera (y que no tengas otro turno a esa hora), el turno nace pendiente y al profesional le llega la solicitud. Reprogramar usa la misma ruta: con reprogramadoDesdeId crea el turno nuevo con el mismo profesional y cancela el viejo en una sola operación (hasta 24 h antes).", "{ fecha, hora, sedeId, especialidadId, medicoId } o { reprogramadoDesdeId, fecha, hora, sedeId }", "201 el turno"],
           ["POST", "/api/turnos/:id/feedback", ["paciente"], "Calificar un turno cumplido. Solo las estrellas son obligatorias; cada criterio que mandes va de 1 a 5.", "{ estrellas, criterios?, comentario? }", "201 la calificación"],
           ["PATCH", "/api/turnos/:id", ["paciente", "doctor"], "Depende de quién la usa: el paciente lo cancela (hasta 24 h antes) o lo saca del historial; el profesional lo confirma o lo rechaza.", "{ estado } o { ocultoEnHistorial: true }", "El turno actualizado"],
         ]
@@ -2143,8 +2151,7 @@ async function misTurnos(pacienteId: string) {
         titulo: "Instituciones y sedes", archivo: "rutas/instituciones.ts", rutas: [
           ["GET", "/api/instituciones?tipos=&lat=&lng=&sedes=", ["paciente"], "Los centros que podés usar (públicos y los que aceptan tu plan), para el mapa y la reserva. Con tu ubicación, ordenados del más cercano al más lejano.", null, "[{ institucion, sede, distanciaKm?, motivo }]"],
           ["GET", "/api/instituciones/:id", ["sesion"], "Una institución con sus sedes y las coberturas que acepta.", null, "La institución"],
-          ["GET", "/api/sedes/buscar?q=", ["sesion"], "El profesional busca dónde atiende: lugares públicos y los que aceptan alguna de sus coberturas.", null, "[sedes]"],
-          ["GET", "/api/sedes?ids=", ["sesion"], "Varias sedes con su institución (los lugares de un profesional).", null, "[sedes]"],
+          ["GET", "/api/sedes?q= o ?ids=", ["sesion"], "Buscar es filtrar el listado de sedes. Con q, el profesional busca dónde atiende (lugares públicos y los que aceptan alguna de sus coberturas); con ids, varias sedes con su institución (los lugares de un profesional).", null, "[sedes]"],
         ]
       },
       {

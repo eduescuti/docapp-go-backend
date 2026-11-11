@@ -3,14 +3,13 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Medico, Paciente, Usuario } from "@prisma/client";
 
 import { prisma } from "../../utils/db";
-import { fechaHoraArgentina } from "../../utils/tiempo";
+import { fechaHoraArgentina, MS_DIA } from "../../utils/tiempo";
 
 /** El usuario de la sesión, con su perfil de paciente o profesional (lo carga `sesionDelToken`). */
 export type UsuarioDeSesion = Usuario & { paciente: Paciente | null; medico: Medico | null };
 
 type OrigenSesion = { ip?: string; dispositivo?: string };
 
-const MS_DIA = 24 * 60 * 60 * 1000;
 const DIAS_SESION_INACTIVA = Number(process.env.DIAS_SESION_INACTIVA ?? 90);
 const RENOVAR_CADA_MS = 60 * 1000;
 const DIAS_HASTA_BORRAR = 30;

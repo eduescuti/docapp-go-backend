@@ -1,7 +1,7 @@
 # Coberturas: obras sociales ↔ instituciones y profesionales
 
 Cómo sabe la app qué hospitales y qué profesionales le sirven a cada paciente según su obra social. Es el
-núcleo de la app (CLAUDE.md §13) y el único dato que **no existe como fuente pública**: no hay API ni
+núcleo de la app y el único dato que **no existe como fuente pública**: no hay API ni
 dataset que diga qué obras sociales acepta cada prestador (investigación en
 `docapp-go/investigacion-apis/03-relacion-cobertura-establecimiento.md`, revisada de nuevo el 27/10/2026:
 los datasets de prestadores de la SSSalud siguen sin esa relación y las prepagas siguen sin API).
@@ -178,7 +178,7 @@ Personal de Escribanos) y no tenían coberturas confirmadas. Las que no tienen p
 
 ## Seed de coberturas
 
-Verificado el **27/10/2026**. Ids del REFES de `frontend/src/mocks/data/refes-caba.json` (`refes-<código>`).
+Verificado el **27/10/2026**. Ids del REFES (`refes-<código>`), los de `backend/prisma/datos/demo.json`.
 "Todos" = fila sin plan.
 
 ### Con fuente oficial (`web_institucion`)

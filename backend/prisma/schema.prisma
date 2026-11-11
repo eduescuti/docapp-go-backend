@@ -196,7 +196,7 @@ model Paciente {
   id             String  @id @default(uuid())
   usuarioId      String  @unique
   planMedicoId   String
-  /// Reservados (§5): existen pero hoy no se piden ni se muestran.
+  /// Reservados (§5): existen pero hoy no se piden, no se muestran y la API no los manda (`aPaciente`).
   numeroAfiliado String?
   email          String?
   telefono       String?
@@ -548,8 +548,8 @@ model Feedback {
 model Notificacion {
   id             String   @id @default(uuid())
   usuarioId      String
-  /// 'recordatorio_turno' | 'turno_confirmado' | 'turno_rechazado' | 'turno_cancelado' |
-  /// 'resultado_disponible' | 'nueva_receta' | 'nueva_orden'
+  /// Al paciente: 'turno_confirmado' | 'turno_rechazado' | 'recordatorio_turno' | 'resultado_disponible' |
+  /// 'nueva_receta' | 'nueva_orden'. Al profesional: 'turno_solicitado' | 'turno_reprogramado' | 'turno_cancelado'.
   tipo           String
   titulo         String
   mensaje        String

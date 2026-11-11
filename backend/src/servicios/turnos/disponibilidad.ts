@@ -2,16 +2,15 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma, registrarAccion } from "../../utils/db";
 import { ErrorHttp } from "../../utils/errores";
-import { ahoraArgentina, diaDeLaSemana, diaSiguiente } from "../../utils/tiempo";
+import { ahoraArgentina, diaDeLaSemana, sumarDias } from "../../utils/tiempo";
 import { institucionVisible, medicoVisible, planDelPaciente } from "../catalogos/cobertura";
 
-// Disponibilidad (06-reglas-de-negocio.md#turnos): qué horarios libres hay según las franjas de atención de cada
+// Disponibilidad: qué horarios libres hay según las franjas de atención de cada
 // profesional, y la carga de esas franjas.
 
 /** Los estados que ocupan el horario. */
 export const ACTIVOS = ["pendiente", "confirmado"];
 const DURACION_TURNO_MIN = 30;
-/** Cuántos días hacia adelante se puede consultar la disponibilidad (la reserva muestra 90). */
 const DIAS_MAXIMOS_CONSULTA = 92;
 
 type Franja = { sedeId: string; diaSemana: number; desde: string; hasta: string };
@@ -53,8 +52,14 @@ async function contextoDisponibilidad(pacienteId: string, medicoIds?: string[]) 
 
 type Contexto = Awaited<ReturnType<typeof contextoDisponibilidad>>;
 
-/** Calcula los horarios libres de un día; si dos franjas de un profesional se pisan, queda la primera. */
-function libresDelDia(ctx: Contexto, fecha: string, ocupados: Set<string>, ahora: string) {
+/** Lo que ya está tomado: turnos activos de los profesionales ("medicoId fecha hora") y del paciente ("fecha hora"). */
+type Ocupados = { deMedicos: Set<string>; delPaciente: Set<string> };
+
+/**
+ * Calcula los horarios libres de un día; si dos franjas de un profesional se pisan, queda la primera. No ofrece los
+ * horarios en que el paciente ya tiene otro turno.
+ */
+function libresDelDia(ctx: Contexto, fecha: string, ocupados: Ocupados, ahora: string) {
   const dia = diaDeLaSemana(fecha);
 
   return ctx.medicos.flatMap((medico) => {
@@ -63,7 +68,10 @@ function libresDelDia(ctx: Contexto, fecha: string, ocupados: Set<string>, ahora
       .filter((f) => f.diaSemana === dia && ctx.sedesVisibles.has(f.sedeId))
       .flatMap((f) =>
         horasDeFranja(f.desde, f.hasta).flatMap((hora) => {
-          if (tomadas.has(hora) || ocupados.has(`${medico.id} ${fecha} ${hora}`) || `${fecha} ${hora}` <= ahora) return [];
+          const momento = `${fecha} ${hora}`;
+          if (tomadas.has(hora) || ocupados.deMedicos.has(`${medico.id} ${momento}`) || ocupados.delPaciente.has(momento) || momento <= ahora) {
+            return [];
+          }
           tomadas.add(hora);
           return [{ medicoId: medico.id, sedeId: f.sedeId, hora }];
         }),
@@ -71,30 +79,33 @@ function libresDelDia(ctx: Contexto, fecha: string, ocupados: Set<string>, ahora
   });
 }
 
-/** Obtiene los turnos activos de esos profesionales entre dos fechas, como claves "medicoId fecha hora". */
-async function ocupadosEntre(medicoIds: string[], desde: string, hasta: string): Promise<Set<string>> {
+/** Obtiene los turnos activos entre dos fechas de esos profesionales y del paciente. */
+async function ocupadosEntre(pacienteId: string, medicoIds: string[], desde: string, hasta: string): Promise<Ocupados> {
   const turnos = await prisma.turno.findMany({
-    where: { medicoId: { in: medicoIds }, estado: { in: ACTIVOS }, fecha: { gte: desde, lte: hasta } },
-    select: { medicoId: true, fecha: true, hora: true },
+    where: { OR: [{ medicoId: { in: medicoIds } }, { pacienteId }], estado: { in: ACTIVOS }, fecha: { gte: desde, lte: hasta } },
+    select: { medicoId: true, pacienteId: true, fecha: true, hora: true },
   });
-  return new Set(turnos.map((t) => `${t.medicoId} ${t.fecha} ${t.hora}`));
+  return {
+    deMedicos: new Set(turnos.map((t) => `${t.medicoId} ${t.fecha} ${t.hora}`)),
+    delPaciente: new Set(turnos.filter((t) => t.pacienteId === pacienteId).map((t) => `${t.fecha} ${t.hora}`)),
+  };
 }
 
 /** Obtiene los horarios libres de ese día para el paciente: `[{ medicoId, sedeId, hora }]`. */
 export async function horariosLibres(pacienteId: string, fecha: string, medicoIds?: string[]) {
   const ctx = await contextoDisponibilidad(pacienteId, medicoIds);
-  const ocupados = await ocupadosEntre(ctx.medicos.map((m) => m.id), fecha, fecha);
+  const ocupados = await ocupadosEntre(pacienteId, ctx.medicos.map((m) => m.id), fecha, fecha);
   return libresDelDia(ctx, fecha, ocupados, ahoraArgentina());
 }
 
 /** Obtiene los días del rango `[desde, hasta]` con algún horario libre para el paciente. */
 export async function diasConTurnos(pacienteId: string, desde: string, hasta: string, medicoIds?: string[]) {
   const ctx = await contextoDisponibilidad(pacienteId, medicoIds);
-  const ocupados = await ocupadosEntre(ctx.medicos.map((m) => m.id), desde, hasta);
+  const ocupados = await ocupadosEntre(pacienteId, ctx.medicos.map((m) => m.id), desde, hasta);
   const ahora = ahoraArgentina();
 
   const dias: string[] = [];
-  for (let fecha = desde, n = 0; fecha <= hasta && n < DIAS_MAXIMOS_CONSULTA; fecha = diaSiguiente(fecha), n++) {
+  for (let fecha = desde, n = 0; fecha <= hasta && n < DIAS_MAXIMOS_CONSULTA; fecha = sumarDias(fecha, 1), n++) {
     if (libresDelDia(ctx, fecha, ocupados, ahora).length > 0) dias.push(fecha);
   }
   return dias;

@@ -4,7 +4,7 @@ import { prisma } from "../../utils/db";
 import { ErrorHttp } from "../../utils/errores";
 import type { CoberturaAceptada, FilaCobertura } from "../formato";
 
-// Coberturas (08-coberturas.md): qué instituciones y qué profesionales le aparecen a un paciente según su plan. El
+// Coberturas: qué instituciones y qué profesionales le aparecen a un paciente según su plan. El
 // plan sale siempre del paciente de la sesión, nunca de la query.
 
 type Plan = { id: string; obraSocialId: string };

@@ -2,15 +2,14 @@ import type { Receta } from "@prisma/client";
 
 import { prisma, registrarAccion } from "../../utils/db";
 import { ErrorHttp } from "../../utils/errores";
-import { hoyArgentina } from "../../utils/tiempo";
+import { hoyArgentina, sumarDias } from "../../utils/tiempo";
 import { aEspecialidad, INCLUIR_ESPECIALIDAD, nombreProfesional, PROFESIONAL_PARA_AVISO } from "../formato";
 import { conAviso } from "../notificaciones/notificaciones";
 import { buscar as buscarMedicos } from "../usuarios/medicos";
 import { exigirVinculo } from "../usuarios/notas";
 
-// Recetas (06-reglas-de-negocio.md#recetas). El estado (activa / pasada) no se guarda: se calcula con vigenteHasta.
+// Recetas. El estado (activa / pasada) no se guarda: se calcula con vigenteHasta.
 
-const MS_DIA = 24 * 60 * 60 * 1000;
 const DURACION_MAXIMA_DIAS = 365;
 
 interface DatosNuevaReceta {
@@ -21,9 +20,6 @@ interface DatosNuevaReceta {
   duracionDias: number;
   indicaciones?: string;
 }
-
-/** Calcula la fecha "yyyy-MM-dd" que cae tantos días después. */
-const sumarDias = (fecha: string, dias: number) => new Date(Date.parse(`${fecha}T12:00:00Z`) + dias * MS_DIA).toISOString().slice(0, 10);
 
 /** Convierte una receta al formato `Receta` del frontend: duración como texto ("30 días") y estado según la fecha. */
 function aReceta(r: Receta) {

@@ -92,7 +92,7 @@ export function aInstitucion(i: InstitucionCompleta) {
 }
 
 /** Convierte un profesional al formato `Medico` del frontend, con su valoración y su foto. */
-export function aMedico(m: MedicoCompleto, valoracion = { promedio: 0, cantidad: 0 }) {
+export function aMedico(m: MedicoCompleto, valoracion: { promedio: number; cantidad: number }) {
   return {
     ...sinNulos({
       id: m.id,
@@ -115,7 +115,10 @@ export function aMedico(m: MedicoCompleto, valoracion = { promedio: 0, cantidad:
   };
 }
 
-/** Convierte un paciente al formato `Paciente` del frontend, con su foto (nunca usarlo en respuestas del admin). */
+/**
+ * Convierte un paciente al formato `Paciente` del frontend, con su foto (nunca usarlo en respuestas del admin). No
+ * manda número de afiliado, email ni teléfono: la app no los usa y también le llegan al profesional por su agenda.
+ */
 export function aPaciente(p: PacienteCompleto) {
   const avatarUrl = urlFoto(p.usuario.fotoArchivo);
 
@@ -124,10 +127,7 @@ export function aPaciente(p: PacienteCompleto) {
     nombre: p.usuario.nombre,
     apellido: p.usuario.apellido,
     dni: p.usuario.dni,
-    email: p.email ?? "",
-    telefono: p.telefono ?? "",
     planMedicoId: p.planMedicoId,
-    numeroAfiliado: p.numeroAfiliado ?? "",
     medicosFavoritosIds: p.medicosFavoritos.map((f) => f.medicoId),
     institucionesFavoritasIds: p.institucionesFavoritas.map((f) => f.institucionId),
     ...(avatarUrl ? { avatarUrl } : {}),

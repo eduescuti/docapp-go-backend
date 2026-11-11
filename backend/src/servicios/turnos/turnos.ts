@@ -20,10 +20,6 @@ import type { UsuarioDeSesion } from "../sesion/sesiones";
 import { buscar as buscarMedicos } from "../usuarios/medicos";
 import { ACTIVOS, enFranja } from "./disponibilidad";
 
-// Turnos (06-reglas-de-negocio.md#turnos). Un turno activo (pendiente o confirmado) ocupa el horario; uno
-// cancelado o rechazado lo libera. Todo turno nuevo nace pendiente.
-
-/** Hasta cuántas horas antes del turno se puede cancelar o reprogramar. */
 const HORAS_MINIMAS_CANCELACION = 24;
 
 /** Prioridad en "Próximos": confirmados arriba de todo, después pendientes y al final rechazados. */
@@ -68,7 +64,7 @@ const distintos = (turnos: TurnoDb[], campo: "medicoId" | "especialidadId" | "se
 const avisoNoConfirmado = (t: TurnoParaAviso): Aviso => ({
   usuarioId: t.paciente.usuarioId,
   tipo: "turno_rechazado",
-  titulo: "Turno no confirmado",
+  titulo: "Turno rechazado",
   mensaje: `${nombreProfesional(t.medico)} no confirmó tu turno de ${t.especialidad.nombre} del ${diaYHora(t)}. Podés pedir otro desde Reservar.`,
   referenciaTipo: "turno",
   referenciaId: t.id,
@@ -200,15 +196,35 @@ async function validarYCrear(tx: Prisma.TransactionClient, pacienteId: string, d
   if (!enFranja(medico.franjas, datos.sedeId, datos.fecha, datos.hora)) throw new ErrorHttp(400, "Ese horario no está entre los del profesional.");
   if (`${datos.fecha} ${datos.hora}` <= ahoraArgentina()) throw new ErrorHttp(400, "Ese horario ya pasó.");
 
-  const ocupado = await tx.turno.count({ where: { medicoId: medico.id, fecha: datos.fecha, hora: datos.hora, estado: { in: ACTIVOS } } });
+  const [ocupado, pacienteOcupado] = await Promise.all([
+    tx.turno.count({ where: { medicoId: medico.id, fecha: datos.fecha, hora: datos.hora, estado: { in: ACTIVOS } } }),
+    tx.turno.count({ where: { pacienteId, fecha: datos.fecha, hora: datos.hora, estado: { in: ACTIVOS } } }),
+  ]);
   if (ocupado > 0) throw new ErrorHttp(409, "Ese horario ya no está disponible.");
+  if (pacienteOcupado > 0) throw new ErrorHttp(409, "Ya tenés otro turno ese día a esa hora.");
 
-  return tx.turno.create({ data: { ...datos, pacienteId, especialidadId: medico.especialidadId, reprogramadoDesdeId } });
+  return tx.turno.create({
+    data: { ...datos, pacienteId, especialidadId: medico.especialidadId, reprogramadoDesdeId },
+    include: INCLUIR_PARA_AVISO,
+  });
 }
 
-/** Reserva un turno; queda pendiente hasta que el profesional lo confirme. */
+/** Formatea el nombre del paciente del turno: "Sofía Martínez". */
+const nombrePaciente = (t: TurnoParaAviso) => `${t.paciente.usuario.nombre} ${t.paciente.usuario.apellido}`;
+
+/** Reserva un turno; queda pendiente hasta que el profesional lo confirme, y a él le llega la solicitud. */
 export async function reservar(pacienteId: string, usuarioId: string, datos: DatosReserva) {
-  const turno = await prisma.$transaction((tx) => validarYCrear(tx, pacienteId, datos));
+  const turno = await conAviso(
+    (tx) => validarYCrear(tx, pacienteId, datos),
+    (t) => ({
+      usuarioId: t.medico.usuarioId,
+      tipo: "turno_solicitado",
+      titulo: "Turno solicitado",
+      mensaje: `${nombrePaciente(t)} pidió un turno de ${t.especialidad.nombre} para el ${diaYHora(t)}. Confirmalo o rechazalo desde su ficha.`,
+      referenciaTipo: "turno",
+      referenciaId: t.id,
+    }),
+  );
   await registrarAccion({ usuarioId, accion: "reserva_turno", entidad: "turno", entidadId: turno.id });
   return aTurno(turno);
 }
@@ -229,18 +245,28 @@ async function turnoDelPaciente(tx: Prisma.TransactionClient, pacienteId: string
   return turno;
 }
 
-/** Cancela el turno y reserva otro con el mismo profesional en una sola transacción. */
+/** Cancela el turno y reserva otro con el mismo profesional en una sola transacción, y se lo avisa al profesional. */
 export async function reprogramar(pacienteId: string, usuarioId: string, turnoId: string, datos: Omit<DatosReserva, "medicoId">) {
   await vencerTurnos();
 
-  const nuevo = await prisma.$transaction(async (tx) => {
-    const viejo = await turnoDelPaciente(tx, pacienteId, turnoId);
-    const motivo = motivoSinCambios(viejo);
-    if (motivo) throw new ErrorHttp(409, motivo);
+  const { nuevo } = await conAviso(
+    async (tx) => {
+      const viejo = await turnoDelPaciente(tx, pacienteId, turnoId);
+      const motivo = motivoSinCambios(viejo);
+      if (motivo) throw new ErrorHttp(409, motivo);
 
-    await tx.turno.update({ where: { id: viejo.id }, data: { estado: "cancelado", canceladoEn: new Date() } });
-    return validarYCrear(tx, pacienteId, { ...datos, medicoId: viejo.medicoId }, viejo.id);
-  });
+      await tx.turno.update({ where: { id: viejo.id }, data: { estado: "cancelado", canceladoEn: new Date() } });
+      return { viejo, nuevo: await validarYCrear(tx, pacienteId, { ...datos, medicoId: viejo.medicoId }, viejo.id) };
+    },
+    ({ viejo, nuevo: t }) => ({
+      usuarioId: t.medico.usuarioId,
+      tipo: "turno_reprogramado",
+      titulo: "Turno reprogramado",
+      mensaje: `${nombrePaciente(t)} pasó su turno del ${diaYHora(viejo)} al ${diaYHora(t)}. Confirmalo o rechazalo desde su ficha.`,
+      referenciaTipo: "turno",
+      referenciaId: t.id,
+    }),
+  );
   await registrarAccion({ usuarioId, accion: "reprogramacion_turno", entidad: "turno", entidadId: nuevo.id, detalle: `desde ${turnoId}` });
 
   return aTurno(nuevo);

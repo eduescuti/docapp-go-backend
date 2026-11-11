@@ -18,7 +18,7 @@ interface Accion {
 }
 
 /**
- * Registro de acciones importantes (§11): logins, cambios de contraseña, altas. Si falla no corta el pedido:
+ * Registro de acciones importantes: logins, cambios de contraseña, altas. Si falla no corta el pedido:
  * se avisa en la consola.
  */
 export async function registrarAccion(datos: Accion): Promise<void> {

@@ -18,6 +18,7 @@ const fcm = getMessaging(getApps().length === 0 ? initializeApp({ credential: ce
 const MAXIMO_LISTADO = 100;
 
 type TipoNotificacion =
+  | "turno_solicitado"
   | "turno_confirmado"
   | "turno_rechazado"
   | "turno_cancelado"
@@ -37,7 +38,7 @@ export interface Aviso {
 }
 
 /** Guarda el aviso en la base (dentro de la transacción del cambio) y lo devuelve para `enviarPush`. */
-export async function notificar(aviso: Aviso, tx: Prisma.TransactionClient = prisma): Promise<Aviso> {
+export async function notificar(aviso: Aviso, tx: Prisma.TransactionClient): Promise<Aviso> {
   await tx.notificacion.create({ data: aviso });
   return aviso;
 }
@@ -99,6 +100,7 @@ export async function listar(usuarioId: string, pacienteId?: string) {
     mensaje: n.mensaje,
     fecha: fechaHoraArgentina(n.creadaEn),
     leida: n.leida,
+    ...(n.referenciaTipo && n.referenciaId ? { referenciaTipo: n.referenciaTipo, referenciaId: n.referenciaId } : {}),
   }));
 }
 

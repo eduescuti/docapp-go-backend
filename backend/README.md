@@ -51,7 +51,9 @@ moderación de feedback por el admin.
 | Órdenes, resultados (PDF, con descarga registrada) y recetas | ✅ | ✅ |
 | Ficha del paciente para el profesional y notas | ✅ | ✅ |
 | Feedback (la valoración de cada profesional sale de acá) y notificaciones | ✅ | ✅ |
-| Notificaciones push con Firebase Cloud Messaging (29/10/2026; el profesional las recibe solo como push) | ✅ | ✅ |
+| Notificaciones push con Firebase Cloud Messaging (29/10/2026) | ✅ | ✅ |
+| Aviso al profesional cuando le piden o le reprograman un turno, con campana en su Inicio (11/11/2026) | ✅ | ✅ |
+| Un paciente no puede tener dos turnos a la misma hora (11/11/2026) | ✅ | ✅ |
 | Admin: métricas y estadísticas | ✅ | ✅ |
 | Verificación de identidad del registro con el código PDF417 del DNI (28/10/2026) | ✅ | ✅ |
 

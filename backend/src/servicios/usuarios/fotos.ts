@@ -5,11 +5,10 @@ import path from "node:path";
 import { prisma, registrarAccion } from "../../utils/db";
 import { ErrorHttp } from "../../utils/errores";
 
-// Fotos de perfil del paciente y del profesional (decidido el 27/10/2026). Cada foto es un archivo en
+// Fotos de perfil del paciente y del profesional. Cada foto es un archivo en
 // uploads/fotos/ (fuera de git, como los PDF) con un nombre al azar que cambia en cada foto nueva; la base
 // guarda solo ese nombre (usuarios.fotoArchivo). La URL no se puede adivinar y solo la reciben quienes pueden
-// ver a esa persona, así que la imagen se sirve sin token: en web, `Image` no puede mandar el header
-// Authorization (06-reglas-de-negocio.md, "Fotos de perfil").
+// ver a esa persona, así que la imagen se sirve sin token: en web, `Image` no puede mandar el header Authorization.
 
 export const CARPETA_FOTOS = path.resolve(__dirname, "..", "..", "..", "uploads", "fotos");
 

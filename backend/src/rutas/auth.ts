@@ -65,8 +65,9 @@ const datosVerificacion = (datos: Record<string, unknown>): servicio.DatosVerifi
   profesion: texto(datos, "profesion", 80),
 });
 
-// POST /api/auth/registro/profesional/verificar { dni, matricula, profesion } → ficha del padrón
-auth.post("/registro/profesional/verificar", async (req, res) => {
+// POST /api/auth/registro/profesional/verificacion { dni, matricula, profesion } → ficha del padrón. Es POST y no
+// GET para que el DNI y la matrícula viajen en el cuerpo y no queden en la URL (ni en los registros del servidor).
+auth.post("/registro/profesional/verificacion", async (req, res) => {
   res.json(await servicio.verificarProfesional(datosVerificacion(cuerpo(req.body))));
 });
 

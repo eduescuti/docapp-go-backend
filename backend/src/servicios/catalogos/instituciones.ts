@@ -15,7 +15,6 @@ interface FiltrosCentros {
   pacienteId: string;
   tipos?: string[];
   cerca?: { latitud: number; longitud: number };
-  /** Solo esas sedes (p. ej. las que tienen turnos libres en la reserva). */
   sedeIds?: string[];
 }
 

@@ -1,6 +1,6 @@
 import { ErrorHttp } from "./errores";
 
-// Que un dato tenga la forma correcta es tarea de la ruta; que tenga sentido, del servicio (02-arquitectura.md).
+// Que un dato tenga la forma correcta es tarea de la ruta; que tenga sentido, del servicio.
 
 /** El body como objeto (express.json deja `undefined` si no vino JSON). */
 export function cuerpo(body: unknown): Record<string, unknown> {
@@ -22,6 +22,12 @@ export function textoOpcional(datos: Record<string, unknown>, campo: string, max
 }
 
 /** Una contraseña tal cual la escribió (sin recortar espacios). */
+/** Un parámetro "a,b,c" de la URL como lista, sin vacíos y con un máximo de elementos. Sin el parámetro, `undefined`. */
+export function listaDeQuery(valor: unknown, maximo: number): string[] | undefined {
+  if (typeof valor !== "string" || !valor.trim()) return undefined;
+  return valor.split(",").map((v) => v.trim()).filter(Boolean).slice(0, maximo);
+}
+
 export function contrasena(datos: Record<string, unknown>, campo: string): string {
   const valor = datos[campo];
   if (typeof valor !== "string" || !valor) throw new ErrorHttp(400, `Falta el campo "${campo}".`);
@@ -35,7 +41,7 @@ export const normalizarDni = (dni: string) => dni.replace(/[.\s]/g, "");
 /** DNI argentino: 7 u 8 dígitos. */
 export const esDniValido = (dni: string) => /^\d{7,8}$/.test(normalizarDni(dni));
 
-/** Regla 14: 8 caracteres, una mayúscula, un número y un carácter especial (igual que `validation.ts` del frontend). */
+/** Regla de contraseña: 8 caracteres, una mayúscula, un número y un carácter especial (igual que `validation.ts` del frontend). */
 export function esContrasenaSegura(password: string): boolean {
   return (
     password.length >= 8 &&

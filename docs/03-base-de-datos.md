@@ -87,6 +87,7 @@ Modelo relacional de DocApp Go para el Sprint 2 (entrega obligatoria de BDD). Mo
 | **Recetas: activa / pasada** | No se guarda: se calcula con `vigenteHasta >= hoy`. `vigenteHasta` se fija al crearla (`fecha + duracionDias`). |
 | **Perfil del médico sin horarios** | El perfil no muestra horarios. Los lugares de atención son `medicos_sedes`; la disponibilidad sale de `franjas_atencion`, que el profesional carga en su Agenda (27/10/2026). |
 | **Un médico no está en dos lugares a la vez** | Índice único parcial `turnos_medico_activo` sobre `(medicoId, fecha, hora)` entre activos. Las franjas de un mismo médico no se pisan entre lugares (lo valida el servicio). |
+| **Un paciente no tiene dos turnos a la misma hora** | Índice único parcial `turnos_paciente_activo` sobre `(pacienteId, fecha, hora)` entre activos (11/11/2026). |
 | **Reprogramar** | No hay estado `reprogramado`: el turno viejo queda `cancelado` y el nuevo nace `pendiente` con `reprogramadoDesdeId`, en una transacción. |
 | **Hospitales por obra social** (reglas 1 y 15) | `instituciones.origen = 'publico'` o existe fila en `instituciones_coberturas` para la obra social del paciente, sin plan o con su plan. |
 | **Feedback solo de turnos cumplidos** (regla 6) | `feedbacks.turnoId` obligatorio y `UNIQUE`; el servicio verifica que el turno esté `completado` y sea del paciente. |
@@ -528,7 +529,8 @@ model NotaPaciente {
 // ───────────── Turnos ─────────────
 
 /// Fecha + hora + hospital (sede) + especialidad + médico: única entre los turnos activos (índice parcial).
-/// Además, un médico no tiene dos turnos activos a la misma fecha y hora (turnos_medico_activo).
+/// Además, un médico no tiene dos turnos activos a la misma fecha y hora (turnos_medico_activo), y un paciente
+/// tampoco (turnos_paciente_activo).
 model Turno {
   id                String    @id @default(uuid())
   pacienteId        String
@@ -732,6 +734,11 @@ CREATE UNIQUE INDEX "turnos_combinacion_activa"
 -- Un profesional no puede tener dos turnos activos a la misma fecha y hora, aunque sea en otro lugar.
 CREATE UNIQUE INDEX "turnos_medico_activo"
   ON "turnos" ("medicoId", "fecha", "hora")
+  WHERE "estado" IN ('pendiente', 'confirmado');
+
+-- Un paciente no puede tener dos turnos activos a la misma fecha y hora (migración 20261111120000_turno_paciente_activo).
+CREATE UNIQUE INDEX "turnos_paciente_activo"
+  ON "turnos" ("pacienteId", "fecha", "hora")
   WHERE "estado" IN ('pendiente', 'confirmado');
 
 -- Franjas: día de la semana válido y desde < hasta (formato "HH:mm", se compara como texto).

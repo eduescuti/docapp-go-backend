@@ -6,7 +6,7 @@ import { fechaArgentina } from "../../utils/tiempo";
 import { aTurno, vencerTurnos } from "./turnos";
 
 // Feedback: solo de un turno completado, del paciente dueño, una vez por turno. Solo "¿Cómo fue tu
-// consulta?" (estrellas) es obligatoria; los criterios son opcionales (28/10/2026). Todo de 1 a 5. La valoración
+// consulta?" (estrellas) es obligatoria; los criterios son opcionales. Todo de 1 a 5. La valoración
 // de cada profesional se calcula de las estrellas (sin los ocultos por moderación).
 
 export const CRITERIOS_FEEDBACK = ["puntualidad", "atencion", "trato", "claridadExplicacion", "experienciaGeneral"] as const;
