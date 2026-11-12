@@ -2,13 +2,17 @@ import { ErrorHttp } from "./errores";
 
 // Que un dato tenga la forma correcta es tarea de la ruta; que tenga sentido, del servicio.
 
-/** El body como objeto (express.json deja `undefined` si no vino JSON). */
+/** Valida que el body esté como un objeto JSON (express.json deja `undefined` si no vino nada). */
 export function cuerpo(body: unknown): Record<string, unknown> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) throw new ErrorHttp(400, "Faltan los datos del pedido.");
   return body as Record<string, unknown>;
 }
 
-/** Un texto obligatorio, recortado y con largo máximo. */
+/** Valida que el campo del body sea un string válido.
+ * 
+ * @param datos El objeto JSON que contiene los datos (p. ej. `req.body`).
+ * @param campo El nombre del campo a validar.
+*/
 export function texto(datos: Record<string, unknown>, campo: string, max = 200): string {
   const valor = datos[campo];
   if (typeof valor !== "string" || !valor.trim()) throw new ErrorHttp(400, `Falta el campo "${campo}".`);
@@ -21,13 +25,13 @@ export function textoOpcional(datos: Record<string, unknown>, campo: string, max
   return datos[campo] === undefined || datos[campo] === null || datos[campo] === "" ? undefined : texto(datos, campo, max);
 }
 
-/** Una contraseña tal cual la escribió (sin recortar espacios). */
-/** Un parámetro "a,b,c" de la URL como lista, sin vacíos y con un máximo de elementos. Sin el parámetro, `undefined`. */
+/** Devuelve un array si el valor es un texto separado por comas. Ej. "a, b, c" → ["a", "b", "c"] */
 export function listaDeQuery(valor: unknown, maximo: number): string[] | undefined {
   if (typeof valor !== "string" || !valor.trim()) return undefined;
   return valor.split(",").map((v) => v.trim()).filter(Boolean).slice(0, maximo);
 }
 
+/** Devuelve una contraseña tal cual la escribió (sin recortar espacios). */
 export function contrasena(datos: Record<string, unknown>, campo: string): string {
   const valor = datos[campo];
   if (typeof valor !== "string" || !valor) throw new ErrorHttp(400, `Falta el campo "${campo}".`);
