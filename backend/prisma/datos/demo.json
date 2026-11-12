@@ -23155,10 +23155,7 @@
       "nombre": "Sofía",
       "apellido": "Martínez",
       "dni": "12345678",
-      "email": "sofia.martinez@example.com",
-      "telefono": "+54 9 11 5555-1234",
       "planMedicoId": "plan-osde210",
-      "numeroAfiliado": "12.345.678",
       "medicosFavoritosIds": [
         "med-ruiz"
       ],
@@ -23171,10 +23168,7 @@
       "nombre": "Lucas",
       "apellido": "Gómez",
       "dni": "38456123",
-      "email": "lucas.gomez@example.com",
-      "telefono": "+54 9 11 5555-2201",
       "planMedicoId": "plan-swiss",
-      "numeroAfiliado": "80-38456123-01",
       "medicosFavoritosIds": [],
       "institucionesFavoritasIds": []
     },
@@ -23183,10 +23177,7 @@
       "nombre": "Martina",
       "apellido": "López",
       "dni": "41789654",
-      "email": "martina.lopez@example.com",
-      "telefono": "+54 9 11 5555-3302",
       "planMedicoId": "plan-osde210",
-      "numeroAfiliado": "41.789.654",
       "medicosFavoritosIds": [],
       "institucionesFavoritasIds": []
     },
@@ -23195,10 +23186,7 @@
       "nombre": "Diego",
       "apellido": "Herrera",
       "dni": "29654987",
-      "email": "diego.herrera@example.com",
-      "telefono": "+54 9 11 5555-4403",
       "planMedicoId": "plan-galeno",
-      "numeroAfiliado": "GA-29654987",
       "medicosFavoritosIds": [],
       "institucionesFavoritasIds": []
     },
@@ -23207,10 +23195,7 @@
       "nombre": "Ana",
       "apellido": "Benítez",
       "dni": "33123456",
-      "email": "ana.benitez@example.com",
-      "telefono": "+54 9 11 5555-5504",
       "planMedicoId": "plan-medife",
-      "numeroAfiliado": "MF-33123456",
       "medicosFavoritosIds": [],
       "institucionesFavoritasIds": []
     },
@@ -23219,10 +23204,7 @@
       "nombre": "Tomás",
       "apellido": "Romero",
       "dni": "44987321",
-      "email": "tomas.romero@example.com",
-      "telefono": "+54 9 11 5555-6605",
       "planMedicoId": "plan-osde210",
-      "numeroAfiliado": "44.987.321",
       "medicosFavoritosIds": [],
       "institucionesFavoritasIds": []
     }

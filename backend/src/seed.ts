@@ -59,10 +59,7 @@ interface DatosDemo {
     nombre: string;
     apellido: string;
     dni: string;
-    email: string;
-    telefono: string;
     planMedicoId: string;
-    numeroAfiliado: string;
     medicosFavoritosIds: string[];
     institucionesFavoritasIds: string[];
   }[];
@@ -369,7 +366,7 @@ async function main(): Promise<void> {
         nombre: p.nombre,
         apellido: p.apellido,
         paciente: {
-          create: { id: p.id, planMedicoId: p.planMedicoId, numeroAfiliado: p.numeroAfiliado, email: p.email, telefono: p.telefono },
+          create: { id: p.id, planMedicoId: p.planMedicoId },
         },
       },
     });

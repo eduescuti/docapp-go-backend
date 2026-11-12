@@ -1,9 +1,3 @@
-// DocApp Go — modelo de datos del Sprint 2 (Prisma + SQLite).
-// Tablas en snake_case plural (@@map); columnas con el mismo nombre que los campos del frontend
-// (src/domain/), así el JSON de la API coincide con los tipos sin traducir.
-// SQLite no tiene ENUM: los estados son String y se restringen con CHECK en la migración
-// (ver "SQL extra de la migración") y con uniones de tipos en TypeScript.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,30 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ───────────── Identidad y seguridad ─────────────
-
 model Usuario {
-  id            String   @id @default(uuid())
-  /// DNI del login único (regla 11): 7 u 8 dígitos en todas las cuentas, también en la de administración.
-  dni           String   @unique
-  /// scrypt: "salt:hash" en hexadecimal. Nunca la contraseña en texto plano.
-  passwordHash  String
-  /// 'paciente' | 'doctor' | 'admin'. Lo determina la cuenta, no se elige al entrar.
-  rol           String
-  nombre        String
-  apellido      String
-  /// Foto de perfil (paciente o profesional): nombre del archivo en uploads/fotos/ ("<uuid>.jpg"), al azar y
-  /// nuevo en cada foto. La API la sirve en /api/fotos/<fotoArchivo>. Null = sin foto (se ven las iniciales).
-  fotoArchivo   String?  @unique
-  /// Verificación de identidad del registro (28/10/2026): se escaneó el código PDF417 del DNI y coincidió con el
-  /// DNI y el nombre de la cuenta. No se guarda la imagen ni el contenido del código: solo cuándo se verificó y un
-  /// HMAC-SHA256 del número de trámite (con SECRETO_IDENTIDAD), para que un mismo DNI físico no abra dos cuentas.
-  /// Null en las cuentas del seed y en la de admin.
+  id                    String    @id @default(uuid())
+  dni                   String    @unique
+  passwordHash          String
+  rol                   String
+  nombre                String
+  apellido              String
+  fotoArchivo           String?   @unique
   identidadVerificadaEl DateTime?
-  tramiteHash   String?  @unique
-  activo        Boolean  @default(true)
-  creadoEn      DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
+  tramiteHash           String?   @unique
+  activo                Boolean   @default(true)
+  creadoEn              DateTime  @default(now())
+  actualizadoEn         DateTime  @updatedAt
 
   paciente       Paciente?
   medico         Medico?
@@ -47,7 +30,6 @@ model Usuario {
   @@map("usuarios")
 }
 
-/// Token de sesión opaco. Se guarda solo su hash SHA-256: si se filtra la base, los tokens no sirven.
 model Sesion {
   id          String    @id @default(uuid())
   usuarioId   String
@@ -55,7 +37,6 @@ model Sesion {
   creadaEn    DateTime  @default(now())
   expiraEn    DateTime
   ultimoUsoEn DateTime  @default(now())
-  /// Logout o cierre forzado. Una sesión revocada no vuelve a valer aunque no haya vencido.
   revocadaEn  DateTime?
   dispositivo String?
   ip          String?
@@ -67,7 +48,6 @@ model Sesion {
   @@map("sesiones")
 }
 
-/// Registro de acciones importantes (§11): logins, cancelaciones, descargas de resultados, altas del admin.
 model RegistroAuditoria {
   id        String   @id @default(uuid())
   usuarioId String?
@@ -84,15 +64,10 @@ model RegistroAuditoria {
   @@map("registro_auditoria")
 }
 
-// ───────────── Cobertura ─────────────
-
-/// Obra social o prepaga ("OSDE"). La carga el admin.
 model ObraSocial {
   id            String  @id @default(uuid())
   nombre        String  @unique
-  /// Nombre largo o aclaración ("Obra Social del Poder Judicial de la Nación"). Se muestra en los selectores.
   descripcion   String?
-  /// 'RNAS' (obras sociales) | 'RNEMP' (prepagas) | 'otro'
   registro      String?
   codigoOficial String?
   activa        Boolean @default(true)
@@ -104,14 +79,13 @@ model ObraSocial {
   @@map("obras_sociales")
 }
 
-/// Plan de una obra social ("OSDE 210"). Es el filtro transversal de la app (§5).
 model PlanMedico {
   id           String  @id @default(uuid())
   obraSocialId String
   nombre       String
   activo       Boolean @default(true)
 
-  obraSocial    ObraSocial        @relation(fields: [obraSocialId], references: [id])
+  obraSocial    ObraSocial             @relation(fields: [obraSocialId], references: [id])
   pacientes     Paciente[]
   instituciones InstitucionCobertura[]
   medicos       MedicoCobertura[]
@@ -120,18 +94,13 @@ model PlanMedico {
   @@map("planes_medicos")
 }
 
-/// Qué coberturas acepta una institución privada o de seguridad social (reglas 1 y 15). Las públicas no
-/// necesitan filas. planMedicoId null = todos los planes de esa obra social. Ver 08-coberturas.md.
 model InstitucionCobertura {
   id            String  @id @default(uuid())
   institucionId String
   obraSocialId  String
   planMedicoId  String?
-  /// 'web_institucion' | 'cartilla_cobertura' | 'relevamiento_propio'
   fuente        String
-  /// Página consultada. Null solo con 'relevamiento_propio'.
   fuenteUrl     String?
-  /// "yyyy-MM-dd" en que se verificó.
   verificadoEl  String
 
   institucion Institucion @relation(fields: [institucionId], references: [id], onDelete: Cascade)
@@ -143,15 +112,10 @@ model InstitucionCobertura {
   @@map("instituciones_coberturas")
 }
 
-// ───────────── Instituciones y geografía ─────────────
-
-/// Hospital, clínica, centro médico o laboratorio.
 model Institucion {
   id       String   @id @default(uuid())
   nombre   String
-  /// 'hospital' | 'clinica' | 'centro_medico' | 'laboratorio'
   tipo     String
-  /// 'publico' | 'privado' | 'seguridad_social' (REFES). Decide la regla 15.
   origen   String
   logoUrl  String?
   sitioWeb String?
@@ -168,7 +132,6 @@ model Institucion {
   @@map("instituciones")
 }
 
-/// Ubicación física: nombre + dirección + latitud + longitud. Hoy, una por institución (REFES).
 model Sede {
   id            String  @id @default(uuid())
   institucionId String
@@ -178,7 +141,6 @@ model Sede {
   latitud       Float
   longitud      Float
   telefono      String?
-  /// establecimiento_id del REFES (14 dígitos). No lo tienen las altas del admin.
   refesId       String? @unique
 
   institucion Institucion      @relation(fields: [institucionId], references: [id], onDelete: Cascade)
@@ -190,16 +152,10 @@ model Sede {
   @@map("sedes")
 }
 
-// ───────────── Pacientes ─────────────
-
 model Paciente {
-  id             String  @id @default(uuid())
-  usuarioId      String  @unique
-  planMedicoId   String
-  /// Reservados (§5): existen pero hoy no se piden, no se muestran y la API no los manda (`aPaciente`).
-  numeroAfiliado String?
-  email          String?
-  telefono       String?
+  id           String @id @default(uuid())
+  usuarioId    String @unique
+  planMedicoId String
 
   usuario                Usuario                       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   plan                   PlanMedico                    @relation(fields: [planMedicoId], references: [id])
@@ -236,9 +192,6 @@ model PacienteInstitucionFavorita {
   @@map("pacientes_instituciones_favoritas")
 }
 
-// ───────────── Profesionales ─────────────
-
-/// Copia del padrón nacional de profesionales. El registro valida la terna DNI + matrícula + profesión acá.
 model ProfesionalPadron {
   id                String  @id @default(uuid())
   codigoProfesional String  @unique
@@ -246,7 +199,6 @@ model ProfesionalPadron {
   nombre            String
   apellido          String
   profesion         String
-  /// SQLite no tiene listas: JSON con los nombres, p. ej. ["Cardiología"].
   especializaciones String  @default("[]")
   emisor            String
   provincia         String
@@ -260,22 +212,19 @@ model ProfesionalPadron {
   @@map("profesionales_padron")
 }
 
-/// Perfil profesional: los datos del registro + lugares de atención. Sin horarios de atención (Sprint 2).
 model Medico {
   id                String  @id @default(uuid())
   usuarioId         String  @unique
   padronId          String? @unique
   matricula         String
-  /// "Médico", "Enfermero", ... (sale del padrón).
   profesion         String
-  /// 'femenino' | 'masculino' — define "Dra." / "Dr.".
   genero            String
   especialidadId    String
   subespecialidadId String?
   descripcion       String  @default("")
   aniosExperiencia  Int?
 
-  usuario         Usuario                 @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario         Usuario                  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   padron          ProfesionalPadron?       @relation(fields: [padronId], references: [id])
   especialidad    Especialidad             @relation(fields: [especialidadId], references: [id])
   subespecialidad Subespecialidad?         @relation(fields: [subespecialidadId], references: [id])
@@ -294,10 +243,8 @@ model Medico {
 }
 
 model Especialidad {
-  id     String @id @default(uuid())
-  nombre String @unique
-  /// Profesión del padrón a la que pertenece ("Médico", "Enfermero", "Kinesiólogo"): el registro solo ofrece las
-  /// de la profesión del profesional. Médicas: Res. 1814/2015; enfermería: Res. 199/2011 (Ministerio de Salud).
+  id        String @id @default(uuid())
+  nombre    String @unique
   profesion String @default("Médico")
 
   subespecialidades Subespecialidad[]
@@ -319,7 +266,6 @@ model Subespecialidad {
   @@map("subespecialidades")
 }
 
-/// Lugares de atención: en qué sedes (hospitales) atiende cada profesional.
 model MedicoSede {
   medicoId String
   sedeId   String
@@ -332,18 +278,13 @@ model MedicoSede {
   @@map("medicos_sedes")
 }
 
-/// Franjas de atención: qué días y de qué hora a qué hora atiende el profesional en cada lugar. Las carga él
-/// en su Agenda (no se muestran en el perfil). Se ofrecen turnos de 30 min dentro de cada franja.
 model FranjaAtencion {
-  id         String @id @default(uuid())
-  medicoId   String
-  sedeId     String
-  /// 0 = domingo … 6 = sábado
-  diaSemana  Int
-  /// "HH:mm", múltiplo de 30 min
-  desde      String
-  /// "HH:mm", mayor que desde
-  hasta      String
+  id        String @id @default(uuid())
+  medicoId  String
+  sedeId    String
+  diaSemana Int
+  desde     String
+  hasta     String
 
   medico Medico @relation(fields: [medicoId], references: [id], onDelete: Cascade)
   sede   Sede   @relation(fields: [sedeId], references: [id], onDelete: Cascade)
@@ -353,7 +294,6 @@ model FranjaAtencion {
   @@map("franjas_atencion")
 }
 
-/// Coberturas que atiende cada profesional (regla 1). Las elige él en su Perfil. Misma lógica de plan opcional.
 model MedicoCobertura {
   id           String  @id @default(uuid())
   medicoId     String
@@ -369,7 +309,6 @@ model MedicoCobertura {
   @@map("medicos_coberturas")
 }
 
-/// Nota privada de un profesional sobre un paciente: solo la ve quien la escribió.
 model NotaPaciente {
   id         String   @id @default(uuid())
   medicoId   String
@@ -384,32 +323,21 @@ model NotaPaciente {
   @@map("notas_paciente")
 }
 
-// ───────────── Turnos ─────────────
-
-/// Fecha + hora + hospital (sede) + especialidad + médico: única entre los turnos activos (índice parcial).
-/// Además, un médico no tiene dos turnos activos a la misma fecha y hora (turnos_medico_activo).
 model Turno {
-  id                String    @id @default(uuid())
-  pacienteId        String
-  medicoId          String
-  sedeId            String
-  /// La del médico al reservar. Se guarda porque es parte de la combinación única de las notas.
-  especialidadId    String
-  /// "yyyy-MM-dd"
-  fecha             String
-  /// "HH:mm"
-  hora              String
-  /// 'pendiente' | 'confirmado' | 'rechazado' | 'cancelado' | 'completado'
-  estado            String    @default("pendiente")
-  /// El paciente lo sacó de su historial. Solo se oculta en esa lista.
-  ocultoEnHistorial Boolean   @default(false)
-  creadoEn          DateTime  @default(now())
-  actualizadoEn     DateTime  @updatedAt
-  /// Cuándo el médico lo confirmó o rechazó.
-  respondidoEn      DateTime?
-  canceladoEn       DateTime?
-  /// Al reprogramar: el turno (cancelado) que este reemplaza.
-  reprogramadoDesdeId String? @unique
+  id                  String    @id @default(uuid())
+  pacienteId          String
+  medicoId            String
+  sedeId              String
+  especialidadId      String
+  fecha               String
+  hora                String
+  estado              String    @default("pendiente")
+  ocultoEnHistorial   Boolean   @default(false)
+  creadoEn            DateTime  @default(now())
+  actualizadoEn       DateTime  @updatedAt
+  respondidoEn        DateTime?
+  canceladoEn         DateTime?
+  reprogramadoDesdeId String?   @unique
 
   paciente          Paciente     @relation(fields: [pacienteId], references: [id])
   medico            Medico       @relation(fields: [medicoId], references: [id])
@@ -425,21 +353,14 @@ model Turno {
   @@map("turnos")
 }
 
-// ───────────── Estudios: órdenes y resultados ─────────────
-
-/// Orden que el médico le asigna al paciente, con indicaciones. Hospital + fecha + médico.
 model Orden {
   id            String   @id @default(uuid())
   medicoId      String
   pacienteId    String
-  /// Dónde hacer los estudios.
   institucionId String
-  /// Fecha de emisión "yyyy-MM-dd".
   fecha         String
   indicaciones  String
-  /// 'pendiente' | 'listo' (pasa a listo con el primer resultado)
   estado        String   @default("pendiente")
-  /// "yyyy-MM-dd" en que el paciente la archivó; null = no archivada.
   archivadoEl   String?
   creadaEn      DateTime @default(now())
 
@@ -454,7 +375,6 @@ model Orden {
   @@map("ordenes")
 }
 
-/// Cada estudio pedido en una orden ("Hemograma completo").
 model OrdenEstudio {
   id       String @id @default(uuid())
   ordenId  String
@@ -467,21 +387,15 @@ model OrdenEstudio {
   @@map("orden_estudios")
 }
 
-/// Resultado: médico (el de la orden) + fecha + hospital + orden + archivo PDF. Sin estado.
 model Resultado {
   id            String   @id @default(uuid())
   ordenId       String
-  /// Dónde se hizo (puede no ser el sugerido en la orden).
   institucionId String
-  /// Nombre del estudio ("Análisis de sangre completo").
   tipo          String
-  /// Fecha del estudio "yyyy-MM-dd".
   fecha         String
-  /// Ruta dentro de uploads/. Nunca se sirve como archivo estático: solo por GET autorizado.
   archivoRuta   String   @unique
   archivoBytes  Int
   archivoSha256 String
-  /// "yyyy-MM-dd" en que el paciente lo archivó; null = no archivado.
   archivadoEl   String?
   cargadoEn     DateTime @default(now())
 
@@ -492,24 +406,18 @@ model Resultado {
   @@map("resultados")
 }
 
-// ───────────── Recetas ─────────────
-
-/// Nombre (medicacion) + dosis + cómo tomarla (frecuencia) + duración + indicación + médico + fecha de emisión.
 model Receta {
   id            String   @id @default(uuid())
   medicoId      String
   pacienteId    String
-  /// Fecha de emisión "yyyy-MM-dd".
   fecha         String
   medicacion    String
   dosis         String
   frecuencia    String
   duracionDias  Int
-  /// fecha + duracionDias. Activa mientras vigenteHasta >= hoy; después, pasada. El estado no se guarda.
   vigenteHasta  String
   indicaciones  String?
   observaciones String?
-  /// "yyyy-MM-dd" en que el paciente la archivó (solo pasadas); null = no archivada.
   archivadoEl   String?
   creadaEn      DateTime @default(now())
 
@@ -521,22 +429,16 @@ model Receta {
   @@map("recetas")
 }
 
-// ───────────── Feedback y notificaciones ─────────────
-
-/// Un feedback por turno completado (regla 6). El médico sale del turno.
 model Feedback {
   id                  String   @id @default(uuid())
   turnoId             String   @unique
-  /// "¿Cómo fue tu consulta?": la única calificación obligatoria (28/10/2026). Es la que da la valoración.
   estrellas           Int
-  /// Criterios opcionales: null = el paciente no lo calificó.
   puntualidad         Int?
   atencion            Int?
   trato               Int?
   claridadExplicacion Int?
   experienciaGeneral  Int?
   comentario          String?
-  /// Moderación del admin: oculto no cuenta en la valoración ni se muestra.
   oculto              Boolean  @default(false)
   creadoEn            DateTime @default(now())
 
@@ -548,13 +450,10 @@ model Feedback {
 model Notificacion {
   id             String   @id @default(uuid())
   usuarioId      String
-  /// Al paciente: 'turno_confirmado' | 'turno_rechazado' | 'recordatorio_turno' | 'resultado_disponible' |
-  /// 'nueva_receta' | 'nueva_orden'. Al profesional: 'turno_solicitado' | 'turno_reprogramado' | 'turno_cancelado'.
   tipo           String
   titulo         String
   mensaje        String
   leida          Boolean  @default(false)
-  /// A qué apunta: 'turno' | 'orden' | 'resultado' | 'receta' + su id.
   referenciaTipo String?
   referenciaId   String?
   creadaEn       DateTime @default(now())

@@ -115,10 +115,7 @@ export function aMedico(m: MedicoCompleto, valoracion: { promedio: number; canti
   };
 }
 
-/**
- * Convierte un paciente al formato `Paciente` del frontend, con su foto (nunca usarlo en respuestas del admin). No
- * manda número de afiliado, email ni teléfono: la app no los usa y también le llegan al profesional por su agenda.
- */
+/** Convierte un paciente al formato `Paciente` del frontend, con su foto (nunca usarlo en respuestas del admin). */
 export function aPaciente(p: PacienteCompleto) {
   const avatarUrl = urlFoto(p.usuario.fotoArchivo);
 

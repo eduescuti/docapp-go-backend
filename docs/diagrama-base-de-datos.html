@@ -438,8 +438,7 @@
     { key: "pacientes", mod: "pacientes", desc: "Paciente: se identifica por DNI (en usuarios) y tiene un plan.", cols: [
       c("id", "TEXT", { pk: true }), c("usuarioId", "TEXT", { fk: "usuarios", uq: true }),
       c("planMedicoId", "TEXT", { fk: "planes_medicos" }),
-      c("numeroAfiliado", "TEXT", { nul: true }), c("email", "TEXT", { nul: true }), c("telefono", "TEXT", { nul: true }),
-    ], notas: ["planMedicoId decide qué hospitales, profesionales y turnos ve.", "numeroAfiliado, email y telefono están reservados: hoy no se piden."] },
+    ], notas: ["planMedicoId decide qué hospitales, profesionales y turnos ve."] },
 
     { key: "pacientes_medicos_favoritos", mod: "pacientes", desc: "Profesionales favoritos del paciente.", cols: [
       c("pacienteId", "TEXT", { pk: true, fk: "pacientes" }), c("medicoId", "TEXT", { pk: true, fk: "medicos" }),

@@ -338,10 +338,6 @@ model Paciente {
   id             String  @id @default(uuid())
   usuarioId      String  @unique
   planMedicoId   String
-  /// Reservados (§5): existen pero hoy no se piden ni se muestran.
-  numeroAfiliado String?
-  email          String?
-  telefono       String?
 
   usuario                Usuario                       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   plan                   PlanMedico                    @relation(fields: [planMedicoId], references: [id])
